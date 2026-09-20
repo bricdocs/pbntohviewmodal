@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Briç Kart Okuyucu -> PBN Pro Stüdyo</title>
+    <style>
+        body { font-family: sans-serif; max-width: 900px; margin: 20px auto; padding: 0 15px; background-color: #f4f6f9; color: #333; line-height: 1.5; }
+        .card-container { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid-layout { grid-template-columns: 1fr; } }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 6px; color: #495057; }
+        textarea { width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; font-family: monospace; font-size: 13px; }
+        .api-area { height: 90px; resize: vertical; }
+        .pbn-area { height: 220px; resize: vertical; background: #fff; color: #000; font-size: 14px; font-weight: bold; border: 2px solid #6c757d; }
+        input[type="file"] { padding: 15px; border: 2px dashed #007bff; width: 100%; box-sizing: border-box; background: #f8f9fa; cursor: pointer; border-radius: 4px; text-align: center; }
+        select { width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; background: white; font-size: 15px; }
+        .btn { padding: 12px 20px; font-size: 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; transition: all 0.2s; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-primary:hover { background-color: #0056b3; }
+        .btn-success { background-color: #28a745; color: white; margin-top: 10px; }
+        .btn-success:hover { background-color: #218838; }
+        button:disabled { background-color: #6c757d !important; cursor: not-allowed; }
+        .status-box { padding: 12px; margin-top: 15px; border-radius: 4px; font-weight: bold; display: none; font-size: 14px; }
+        .loading { color: #856404; background-color: #fff3cd; border: 1px solid #ffeeba; }
+        .error { color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; white-space: pre-wrap; font-family: monospace; font-size: 12px; font-weight: normal; }
+        .success { color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; }
+        .badge { display: inline-block; background: #007bff; color: white; padding: 3px 10px; border-radius: 12px; font-size: 13px; font-weight: bold; }
+        .file-list { margin-top: 10px; font-size: 13px; color: #495057; background: #e9ecef; padding: 10px; border-radius: 4px; line-height: 1.6; }
+        .info-text { font-size: 12px; color: #6c757d; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+    <h2>Briç El Görsellerini PBN Formatına Çevir Pro</h2>
+    
+    <div class="card-container">
+        <div class="grid-layout">
+            <div>
+                <div class="input-group">
+                    <label for="apiKeys">Gemini API Anahtarları (Her satıra bir adet):</label>
+                    <textarea id="apiKeys" class="api-area" placeholder="AIzaSy... (İlk Anahtar)&#10;AIzaSy... (Yedek Anahtar 1)" oninput="saveKeysToStorage()"></textarea>
+                    <div class="info-text">Anahtarlar tarayıcı hafızasına (LocalStorage) otomatik kaydedilir.</div>
+                </div>
+                
+                <div class="input-group">
+                    <label for="boardNo">Board No (El Numarası):</label>
+                    <select id="boardNo">
+                        <!-- 1'den 40'a kadar dinamik olarak aşağıda doldurulacak -->
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <div class="input-group">
+                    <label>4 Yönün Fotoğrafını Seçin (Aynı Anda Birden Seçin):</label>
+                    <input type="file" id="imgBulk" accept="image/*" multiple onchange="handleFileSelect()">
+                    <div class="info-text">İsminde 'north/kuzey', 'east/dogu', 'south/guney', 'west/bati' geçenleri otomatik eşleştirir.</div>
+                </div>
+                <div id="fileListDisplay" class="file-list">Dosya seçilmedi. En az 4 fotoğraf seçmelisiniz.</div>
+            </div>
+        </div>
+
+        <button id="btnProcess" class="btn btn-primary" onclick="processImages()">PBN ÜRET VE ANALİZ ET</button>
+        <div id="statusMessage" class="status-box"></div>
+    </div>
+
+    <div class="card-container">
+        <div style="margin-bottom: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+            <span>Düzenlenebilir PBN Çıktısı (Elle düzeltebilirsiniz):</span>
+            <div>Başarılı İşlem Sayısı: <span id="requestCounter" class="badge">0</span></div>
+        </div>
+        <textarea id="output" class="pbn-area" placeholder="Analiz bittiğinde PBN verisi buraya gelecek. Yanlış okunan kartları buradan elle değiştirebilirsiniz."></textarea>
+        <button id="btnDownload" class="btn btn-success" onclick="downloadPBN()" disabled>PBN DOSYASI OLARAK BİLGİSAYARA İNDİR</button>
+    </div>
+
+    <script>
+        let detectedFiles = { north: null, east: null, south: null, west: null };
+        let successfulRequests = 0;
+        let currentKeyIndex = 0;
+
+        // Sayfa yüklendiğinde select kutusunu doldur ve hafızadaki keyleri oku
+        window.addEventListener('DOMContentLoaded', () => {
+            const select = document.getElementById('boardNo');
+            for (let i = 1; i <= 40; i++) {
+                let opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `Board ${i}`;
+                select.appendChild(opt);
+            }
+
+            // LocalStorage'dan anahtarları geri yükle
+            const savedKeys = localStorage.getItem('bridge_gemini_api_keys');
+            if (savedKeys) {
+                document.getElementById('apiKeys').value = savedKeys;
+            }
+        });
+
+        function saveKeysToStorage() {
+            const keys = document.getElementById('apiKeys').value;
+            localStorage.setItem('bridge_gemini_api_keys', keys);
+        }
+
+        function handleFileSelect() {
+            const files = document.getElementById('imgBulk').files;
+            const display = document.getElementById('fileListDisplay');
+            display.innerHTML = "";
+            detectedFiles = { north: null, east: null, south: null, west: null };
+
+            if (files.length === 0) { display.textContent = "Dosya seçilmedi."; return; }
+            let fileArray = Array.from(files);
+            let usedOrder = false;
+
+            if (fileArray.length === 4) {
+                fileArray.forEach(file => {
+                    const name = file.name.toLowerCase();
+                    if (name.includes('north') || name.includes('kuzey')) detectedFiles.north = file;
+                    else if (name.includes('east') || name.includes('dogu') || name.includes('doğu')) detectedFiles.east = file;
+                    else if (name.includes('south') || name.includes('guney') || name.includes('güney')) detectedFiles.south = file;
+                    else if (name.includes('west') || name.includes('bati') || name.includes('batı')) detectedFiles.west = file;
+                });
+            }
+
+            if (!detectedFiles.north || !detectedFiles.east || !detectedFiles.south || !detectedFiles.west) {
+                detectedFiles.north = files[0] || null;
+                detectedFiles.east = files[1] || null;
+                detectedFiles.south = files[2] || null;
+                detectedFiles.west = files[3] || null;
+                usedOrder = true;
+            }
+
+            display.innerHTML = `
+                <strong>Eşleşen Dosya Dağılımları:</strong><br>
+                ♠️ N (Kuzey): ${detectedFiles.north ? detectedFiles.north.name : '❌ Eksik'}<br>
+                ♦️ E (Doğu): ${detectedFiles.east ? detectedFiles.east.name : '❌ Eksik'}<br>
+                ♥️ S (Güney): ${detectedFiles.south ? detectedFiles.south.name : '❌ Eksik'}<br>
+                ♣️ W (Batı): ${detectedFiles.west ? detectedFiles.west.name : '❌ Eksik'}
+                ${usedOrder && files.length === 4 ? '<br><span style="color:#d63031; font-weight:bold;">⚠️ İsimlerden yön anlaşılamadı, seçilme sırasına (N,E,S,W) göre dizildi.</span>' : ''}
+            `;
+        }
+
+        const fileToGenerativePart = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    resolve({
+                        inlineData: {
+                            data: reader.result.split(','),
+                            mimeType: file.type
+                        },
+                    });
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        };
+
+        function updateStatus(text, type) {
+            const statusBox = document.getElementById('statusMessage');
+            statusBox.style.display = 'block';
+            statusBox.className = 'status-box ' + type;
+            statusBox.textContent = text;
+        }
+
+        async function processImages() {
+            const keysInput = document.getElementById('apiKeys').value.trim();
+            const outElement = document.getElementById('output');
+            const button = document.getElementById('btnProcess');
+            const downloadButton = document.getElementById('btnDownload');
+            const boardSelect = document.getElementById('boardNo');
+            
+            const apiKeys = keysInput.split('\n').map(k => k.trim()).filter(k => k.length > 0);
+            let errorLogHistory = ""; // Sunucudan gelen ham hataları biriktirmek için
+
+            if (apiKeys.length === 0) {
+                alert('Lütfen en az bir geçerli Gemini API anahtarı girin.');
+                return;
+            }
+
+            if (!detectedFiles.north || !detectedFiles.east || !detectedFiles.south || !detectedFiles.west) {
+                alert('Lütfen 4 yönün de fotoğrafını içerdiğinden emin olun (Tam 4 fotoğraf seçmelisiniz).');
+                return;
+            }
+
+            try {
+                button.disabled = true;
+                downloadButton.disabled = true;
+                outElement.value = "";
+                updateStatus("Görseller dönüştürülüyor, istek hazırlanıyor...", "loading");
+
+                const promptParts = [
+                    await fileToGenerativePart(detectedFiles.north),
+                    await fileToGenerativePart(detectedFiles.east),
+                    await fileToGenerativePart(detectedFiles.south),
+                    await fileToGenerativePart(detectedFiles.west),
+                    {
+                        text: `Sana sırasıyla Kuzey, Doğu, Güney ve Batı oyuncularının briç masasındaki ellerinin fotoğraflarını gönderdim. 
+                        Lütfen bu görsellerdeki kartları analiz et ve briç standartlarına uygun bir PBN (Portable Bridge Notation) formatı üret. 
+                        Çıktıda sadece geçerli PBN kod bloğu yer alsın, ekstra açıklama veya metin yazma. 10'lu kartlar için 'T' harfini kullan.`
+                    }
+                ];
+
+                const protocol = "https://";
+                const domain = "generativelanguage";
+                const tld = ".googleapis.com";
+                const path = "/v1beta/models/gemini-3.6-flash:generateContent"; // Zorunlu kılınan yeni 3.6 modeli
+                
+                let success = false;
+                let response;
+
+                while (currentKeyIndex < apiKeys.length && !success) {
+                    const activeKey = apiKeys[currentKeyIndex];
+                    const url = protocol + domain + tld + path + "?key=" + activeKey;
+                    
+                    let retries = 3; 
+                    let delay = 3000;
+
+                    while (retries >= 0) {
+                        try {
+                            updateStatus(`İstek gönderiliyor... Anahtar: ${currentKeyIndex + 1}/${apiKeys.length} (Deneme: ${4 - retries}/4)`, "loading");
+                            
+                            response = await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ contents: [{ parts: promptParts }] })
+                            });
+
+                            // Sunucu yoğunluğu (503) durumu yönetimi
+                            if (response.status === 503) {
+                                errorLogHistory += `⚠️ Anahtar ${currentKeyIndex + 1} (Deneme ${4 - retries}): 503 Sunucu Yoğun Hatası Alındı.\n`;
+                                if (retries === 0) throw new Error("503");
+                                updateStatus(`Sunucu yoğun (503 Hatası). ${delay / 1000} saniye içinde tekrar deneniyor...`, "loading");
+                                await new Promise(res => setTimeout(res, delay));
+                                retries--;
+                                delay *= 2;
+                                continue;
+                            }
+
+                            // 503 dışındaki tüm hatalar (429 Kota, 400 Geçersiz Key vb.) ham veriyi alıp sonraki key'e geçmek için tetiklenir
+                            if (!response.ok) {
+                                const errJson = await response.json().catch(() => ({}));
+                                const rawMessage = errJson.error ? `${errJson.error.status} - ${errJson.error.message}` : "Bilinmeyen Sunucu Hatası";
+                                errorLogHistory += `❌ Anahtar ${currentKeyIndex + 1}: Sunucu Hata Kodu ${response.status} (${rawMessage})\n`;
+                                throw new Error(`API_ERROR`);
+                            }
+
+                            success = true;
+                            break;
+
+                        } catch (err) {
+                            if (err.message === "503" || err.message === "API_ERROR") {
+                                break; // İç döngüden çık, anahtarı ellemek üzere dış döngüye fırlat
+                            }
+                            errorLogHistory += `🌐 Anahtar ${currentKeyIndex + 1}: Bağlantı/Ağ Hatası Meydana Geldi.\n`;
+                            if (retries === 0) throw err;
+                            await new Promise(res => setTimeout(res, delay));
+                            retries--;
+                        }
+                    }
+
+                    if (!success) {
+                        console.warn(`Anahtar ${currentKeyIndex + 1} başarısız oldu. Sonraki yedek anahtara geçiliyor...`);
+                        currentKeyIndex++; 
+                    }
+                }
+
+                if (!success) {
+                    currentKeyIndex = 0; // Bir sonraki genel işlem için havuzu sıfırla
+                    throw new Error(`Havuzdaki tüm API anahtarları tükendi. Sunucudan dönen ham detaylar:\n\n${errorLogHistory}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates.content.parts.text) {
+                    let pbnResult = result.candidates.content.parts.text;
+                    pbnResult = pbnResult.replace(/```pbn/g, '').replace(/```/g, '').trim();
+                    
+                    // Dinamik olarak seçilen Board numarasını PBN içeriğine enjekte etme
+                    const selectedBoard = boardSelect.value;
+                    pbnResult = pbnResult.replace(/\[Board\s+"[^"]*"\]/g, `[Board "${selectedBoard}"]`);
+                    
+                    outElement.value = pbnResult;
+                    
+                    successfulRequests++;
+                    document.getElementById('requestCounter').textContent = successfulRequests;
+                    downloadButton.disabled = false;
+                    
+                    updateStatus(`Başarıyla tamamlandı! (Kullanılan Anahtar Sırası: ${currentKeyIndex + 1})`, "success");
+                } else {
+                    outElement.value = JSON.stringify(result, null, 2);
+                    updateStatus("API yanıt verdi ancak veri şablonu çözülemedi.", "error");
+                }
+
+            } catch (error) {
+                console.error(error);
+                outElement.value = "İşlem durduruldu. Detaylar üstteki kutuda yer almaktadır.";
+                updateStatus(error.message, "error");
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        function downloadPBN() {
+            const pbnContent = document.getElementById('output').value;
+            const boardSelect = document.getElementById('boardNo');
+            const selectedBoard = boardSelect.value;
+
+            if (!pbnContent.trim()) {
+                alert("İndirilecek PBN verisi bulunamadı.");
+                return;
+            }
+
+            // Dosya içeriğindeki [Board "X"] etiketini son ana göre tekrar sağlama alıyoruz
+            let finalContent = pbnContent.replace(/\[Board\s+"[^"]*"\]/g, `[Board "${selectedBoard}"]`);
+
+            const blob = new Blob([finalContent], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            // Dosya ismini dinamik yapma örn: bric_el_board_5.pbn
+            link.download = `bric_el_board_${selectedBoard}.pbn`;
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
+
