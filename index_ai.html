@@ -3,21 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Briç Kart Okuyucu -> PBN (Güvenli Sürüm)</title>
+    <title>Briç Kart Okuyucu -> PBN (Gelişmiş Sürüm)</title>
     <style>
         body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 0 15px; background-color: #f9f9f9; color: #333; }
         .card-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .input-group { margin-bottom: 15px; }
         label { display: block; font-weight: bold; margin-bottom: 5px; }
-        input[type="text"], input[type="password"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        input[type="file"] { padding: 5px 0; }
-        button { padding: 12px 24px; font-size: 16px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
+        textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: monospace; height: 80px; resize: vertical; }
+        input[type="file"] { padding: 10px; border: 2px dashed #ccc; width: 100%; box-sizing: border-box; background: #fafafa; cursor: pointer; }
+        button { padding: 12px 24px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         button:disabled { background-color: #6c757d; cursor: not-allowed; }
         pre { background: #272822; color: #f8f8f2; padding: 15px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; font-family: monospace; min-height: 100px; }
         .status-box { padding: 12px; margin-top: 15px; border-radius: 4px; display: none; font-weight: bold; }
         .loading { color: #856404; background-color: #fff3cd; border: 1px solid #ffeeba; }
         .error { color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; }
         .success { color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; }
+        .counter-badge { display: inline-block; background: #E0E0E0; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-left: 5px; }
+        .file-list { margin-top: 8px; font-size: 13px; color: #555; line-height: 1.4; }
     </style>
 </head>
 <body>
@@ -26,25 +28,14 @@
     
     <div class="card-container">
         <div class="input-group">
-            <label for="apiKey">Gemini API Key:</label>
-            <input type="password" id="apiKey" placeholder="AIzaSy... (Google AI Studio Anahtarınız)">
+            <label for="apiKeys">Gemini API Anahtarları (Her satıra bir tane):</label>
+            <textarea id="apiKeys" placeholder="AIzaSy... (İlk Anahtar)&#10;AIzaSy... (Yedek Anahtar 1)"></textarea>
         </div>
 
         <div class="input-group">
-            <label>Kuzey (North) Fotoğrafı:</label>
-            <input type="file" id="imgNorth" accept="image/*">
-        </div>
-        <div class="input-group">
-            <label>Doğu (East) Fotoğrafı:</label>
-            <input type="file" id="imgEast" accept="image/*">
-        </div>
-        <div class="input-group">
-            <label>Güney (South) Fotoğrafı:</label>
-            <input type="file" id="imgSouth" accept="image/*">
-        </div>
-        <div class="input-group">
-            <label>Batı (West) Fotoğrafı:</label>
-            <input type="file" id="imgWest" accept="image/*">
+            <label>4 Yönün Fotoğrafını Birden Seçin (N, E, S, W):</label>
+            <input type="file" id="imgBulk" accept="image/*" multiple onchange="handleFileSelect()">
+            <div id="fileListDisplay" class="file-list"></div>
         </div>
 
         <button id="btnProcess" onclick="processImages()">PBN ÜRET VE ÇÖZ</button>
@@ -52,18 +43,62 @@
         <div id="statusMessage" class="status-box"></div>
     </div>
 
+    <div style="margin-bottom: 15px; font-weight: bold;">
+        Bu Oturumdaki Toplam Başarılı İstek Sayısı: <span id="requestCounter" class="counter-badge">0</span>
+    </div>
+
     <h3>Sonuç (PBN Çıktısı):</h3>
     <pre id="output">Görselleri seçip butona bastığınızda PBN kodu burada görünecektir.</pre>
 
     <script>
-        // Dosyayı taban64 (base64) formatına çeviren yardımcı fonksiyon
+        let detectedFiles = { north: null, east: null, south: null, west: null };
+        let successfulRequests = 0;
+        let currentKeyIndex = 0;
+
+        function handleFileSelect() {
+            const files = document.getElementById('imgBulk').files;
+            const display = document.getElementById('fileListDisplay');
+            display.innerHTML = "";
+            detectedFiles = { north: null, east: null, south: null, west: null };
+
+            if (files.length === 0) return;
+            let usedOrder = false;
+            let fileArray = Array.from(files);
+
+            if (fileArray.length === 4) {
+                fileArray.forEach(file => {
+                    const name = file.name.toLowerCase();
+                    if (name.includes('north') || name.includes('kuzey')) detectedFiles.north = file;
+                    else if (name.includes('east') || name.includes('dogu') || name.includes('doğu')) detectedFiles.east = file;
+                    else if (name.includes('south') || name.includes('guney') || name.includes('güney')) detectedFiles.south = file;
+                    else if (name.includes('west') || name.includes('bati') || name.includes('batı')) detectedFiles.west = file;
+                });
+            }
+
+            if (!detectedFiles.north || !detectedFiles.east || !detectedFiles.south || !detectedFiles.west) {
+                detectedFiles.north = files[0] || null;
+                detectedFiles.east = files[1] || null;
+                detectedFiles.south = files[2] || null;
+                detectedFiles.west = files[3] || null;
+                usedOrder = true;
+            }
+
+            display.innerHTML = `
+                <strong>Eşleşen Yönler:</strong><br>
+                🟢 Kuzey (North): ${detectedFiles.north ? detectedFiles.north.name : '❌ Seçilmedi'}<br>
+                🟢 Doğu (East): ${detectedFiles.east ? detectedFiles.east.name : '❌ Seçilmedi'}<br>
+                🟢 Güney (South): ${detectedFiles.south ? detectedFiles.south.name : '❌ Seçilmedi'}<br>
+                🟢 Batı (West): ${detectedFiles.west ? detectedFiles.west.name : '❌ Seçilmedi'}
+            `;
+        }
+
         const fileToGenerativePart = (file) => {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     resolve({
                         inlineData: {
-                            data: reader.result.split(',')[1], // Sadece saf base64 datasını alıyoruz
+                            data: reader.result.split(',')[1],
                             mimeType: file.type
                         },
                     });
@@ -73,7 +108,6 @@
             });
         };
 
-        // Durum mesajı kutusunu güncelleyen fonksiyon
         function updateStatus(text, type) {
             const statusBox = document.getElementById('statusMessage');
             statusBox.style.display = 'block';
@@ -82,109 +116,117 @@
         }
 
         async function processImages() {
-            const apiKey = document.getElementById('apiKey').value.trim();
+            const keysInput = document.getElementById('apiKeys').value.trim();
             const outElement = document.getElementById('output');
             const button = document.getElementById('btnProcess');
+            const apiKeys = keysInput.split('\n').map(k => k.trim()).filter(k => k.length > 0);
 
-            if (!apiKey) {
-                alert('Lütfen geçerli bir Gemini API anahtarı girin.');
+            if (apiKeys.length === 0) {
+                alert('Lütfen en az bir geçerli Gemini API anahtarı girin.');
                 return;
             }
 
-            const fileInputs = {
-                North: document.getElementById('imgNorth').files[0],
-                East: document.getElementById('imgEast').files[0],
-                South: document.getElementById('imgSouth').files[0],
-                West: document.getElementById('imgWest').files[0]
-            };
-
-            // Tüm dosyaların seçilip seçilmediğini kontrol ediyoruz
-            if (!fileInputs.North || !fileInputs.East || !fileInputs.South || !fileInputs.West) {
-                alert('Lütfen 4 yönün de (Kuzey, Doğu, Güney, Batı) fotoğraflarını eksiksiz yükleyin.');
+            if (!detectedFiles.north || !detectedFiles.east || !detectedFiles.south || !detectedFiles.west) {
+                alert('Lütfen 4 yönün de fotoğrafını içerdiğinden emin olun (Tam 4 fotoğraf seçmelisiniz).');
                 return;
             }
 
             try {
                 button.disabled = true;
-                outElement.textContent = "İşlem başlatıldı...";
-                updateStatus("Görseller hafızaya alınıyor, lütfen bekleyin...", "loading");
+                outElement.textContent = "Görseller hazırlanıyor...";
+                updateStatus("Görseller hafızaya alınıyor...", "loading");
 
-                // Görselleri API'nin okuyabileceği formata dönüştür
                 const promptParts = [
-                    await fileToGenerativePart(fileInputs.North),
-                    await fileToGenerativePart(fileInputs.East),
-                    await fileToGenerativePart(fileInputs.South),
-                    await fileToGenerativePart(fileInputs.West),
+                    await fileToGenerativePart(detectedFiles.north),
+                    await fileToGenerativePart(detectedFiles.east),
+                    await fileToGenerativePart(detectedFiles.south),
+                    await fileToGenerativePart(detectedFiles.west),
                     {
-                        text: `Sana sırasıyla Kuzey, Doğu, Güney ve Batı oyuncularının briç masasındaki ellerinin fotoğraflarını gönderdim. 
-                        Lütfen bu görsellerdeki kartları analiz et ve briç standartlarına uygun bir PBN (Portable Bridge Notation) formatı üret. 
-                        Çıktıda sadece geçerli PBN kod bloğu yer alsın, ekstra açıklama veya metin yazma. 10'lu kartlar için 'T' harfini kullan.`
+                        text: `Sana sırasıyla Kuzey, Doğu, Güney ve Batı oyuncularının briç masasındaki ellerinin fotoğraflarını gönderdim. Lütfen bu görsellerdeki kartları analiz et ve briç standartlarına uygun bir PBN (Portable Bridge Notation) formatı üret. Çıktıda sadece geçerli PBN kod bloğu yer alsın, ekstra açıklama veya metin yazma. 10'lu kartlar için 'T' harfini kullan.`
                     }
                 ];
 
-                // URL yapısını filtrelerden kaçırmak için parçalı birleştiriyoruz
                 const protocol = "https://";
                 const domain = "generativelanguage";
                 const tld = ".googleapis.com";
-                const path = "/v1beta/models/gemini-2.5-flash:generateContent"; // Ücretsiz ve kararlı 2.5 Flash modeli
-                const url = protocol + domain + tld + path + "?key=" + apiKey;
-
+                const path = "/v1beta/models/gemini-3.6-flash:generateContent";
+                
+                let success = false;
                 let response;
-                let retries = 3; // 503 durumunda maksimum 3 kez yeniden dene
-                let delay = 3000; // İlk hata sonrası bekleme süresi (3 saniye)
 
-                while (retries >= 0) {
-                    try {
-                        const currentAttempt = 4 - retries;
-                        updateStatus(`İstek gönderiliyor... (Deneme: ${currentAttempt}/4)`, "loading");
-                        
-                        response = await fetch(url, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ contents: [{ parts: promptParts }] })
-                        });
+                while (currentKeyIndex < apiKeys.length && !success) {
+                    const activeKey = apiKeys[currentKeyIndex];
+                    const url = protocol + domain + tld + path + "?key=" + activeKey;
+                    
+                    let retries = 3; 
+                    let delay = 3000;
 
-                        // Eğer sunucu yoğunluğundan dolayı 503 hatası alırsak tetiklenecek akıllı bekleme
-                        if (response.status === 503) {
-                            if (retries === 0) {
-                                throw new Error("Google sunucuları şu an aşırı yoğun (503). Tüm yeniden denemeler başarısız oldu.");
+                    while (retries >= 0) {
+                        try {
+                            updateStatus(`İstek gönderiliyor... Anahtar: ${currentKeyIndex + 1}/${apiKeys.length} (Deneme: ${4 - retries}/4)`, "loading");
+                            
+                            response = await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ contents: [{ parts: promptParts }] })
+                            });
+
+                            if (response.status === 503) {
+                                if (retries === 0) throw new Error("503");
+                                updateStatus(`Sunucu yoğun (503 Hatası). ${delay / 1000} saniye içinde tekrar deneniyor...`, "loading");
+                                await new Promise(res => setTimeout(res, delay));
+                                retries--;
+                                delay *= 2;
+                                continue;
                             }
-                            updateStatus(`Sunucu yoğun (503 Hatası). ${delay / 1000} saniye içinde otomatik tekrar deneniyor...`, "loading");
+
+                            if (!response.ok) {
+                                throw new Error(`API_ERROR_${response.status}`);
+                            }
+
+                            success = true;
+                            break;
+
+                        } catch (err) {
+                            if (err.message === "503" || err.message.startsWith("API_ERROR_")) {
+                                break;
+                            }
+                            if (retries === 0) throw err;
                             await new Promise(res => setTimeout(res, delay));
                             retries--;
-                            delay *= 2; // Katlanarak artan bekleme süresi (3s -> 6s -> 12s)
-                            continue;
                         }
-
-                        // 503 harici bir durum geldiyse (200 Başarılı veya 400/429 gibi kalıcı hatalar) döngüden çık
-                        break;
-
-                    } catch (fetchError) {
-                        if (retries === 0) throw fetchError;
-                        updateStatus(`Bağlantı kesildi, ${delay / 1000} saniye sonra yeniden deneniyor...`, "loading");
-                        await new Promise(res => setTimeout(res, delay));
-                        retries--;
-                        delay *= 2;
                     }
+
+                    if (!success) {
+                        console.warn(`Anahtar ${currentKeyIndex + 1} başarısız oldu. Sonraki anahtara geçiliyor...`);
+                        currentKeyIndex++; 
+                    }
+                }
+
+                if (!success) {
+                    currentKeyIndex = 0;
+                    throw new Error("Havuzdaki tüm API anahtarları denendi ancak sonuç alınamadı.");
                 }
 
                 const result = await response.json();
                 
-                if (response.ok && result.candidates && result.candidates[0].content.parts[0].text) {
+                if (result.candidates && result.candidates[0].content.parts[0].text) {
                     let pbnResult = result.candidates[0].content.parts[0].text;
-                    // Markdown kalıplarını temizle
                     pbnResult = pbnResult.replace(/```pbn/g, '').replace(/```/g, '').trim();
                     outElement.textContent = pbnResult;
-                    updateStatus("Başarıyla tamamlandı!", "success");
+                    
+                    successfulRequests++;
+                    document.getElementById('requestCounter').textContent = successfulRequests;
+                    
+                    updateStatus(`Başarıyla tamamlandı! (Kullanılan Anahtar Sırası: ${currentKeyIndex + 1})`, "success");
                 } else {
-                    const errorMsg = result.error ? result.error.message : "Bilinmeyen bir API hatası.";
                     outElement.textContent = JSON.stringify(result, null, 2);
-                    updateStatus("API Hatası: " + errorMsg, "error");
+                    updateStatus("API yanıt şablonu çözülemedi.", "error");
                 }
 
             } catch (error) {
                 console.error(error);
-                outElement.textContent = "İşlem sırasında hata meydana geldi.";
+                outElement.textContent = "İşlem durduruldu.";
                 updateStatus(error.message, "error");
             } finally {
                 button.disabled = false;
