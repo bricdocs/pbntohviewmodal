@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Briç Masa Fotoğrafı Kırpma Aracı v1.5</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #121826; color: #f0f4f8; padding: 20px; line-height: 1.5; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid #2a3447; }
+        h1 { font-size: 1.8rem; color: #38bdf8; margin-bottom: 8px; }
+        .badge { background: #0284c7; color: #fff; padding: 2px 8px; border-radius: 6px; font-size: 0.8rem; vertical-align: middle; }
+        p.subtitle { color: #94a3b8; font-size: 0.95rem; }
+
+        .panel { background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 25px; }
+        .upload-area { background: #1e293b; border: 2px dashed #38bdf8; border-radius: 12px; padding: 25px; text-align: center; margin-bottom: 20px; cursor: pointer; transition: border-color 0.2s; }
+        .upload-area:hover { border-color: #7dd3fc; }
+        .btn-upload { color: #38bdf8; font-weight: 700; font-size: 1.1rem; }
+        .upload-hint { color: #94a3b8; font-size: 0.85rem; margin-top: 8px; display: block; }
+
+        .btn { display: inline-block; background: #0284c7; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; font-size: 0.95rem; transition: background 0.2s; text-decoration: none; margin: 4px; }
+        .btn:hover { background: #0369a1; }
+        .btn:disabled { background: #334155; color: #64748b; cursor: not-allowed; opacity: 0.6; }
+        .btn-success { background: #10b981; }
+        .btn-success:hover { background: #059669; }
+        .btn-large { width: 100%; padding: 14px; font-size: 1.1rem; margin-top: 15px; }
+
+        /* KAMERA MODAL VE CANLI YAYIN ALANI */
+        .camera-panel { background: #0f172a; border: 1px solid #38bdf8; border-radius: 12px; padding: 15px; text-align: center; margin-bottom: 20px; display: none; }
+        .camera-video, .camera-preview-captured { width: 100%; max-width: 600px; max-height: 400px; border-radius: 8px; border: 1px solid #334155; background: #000; object-fit: contain; }
+        .camera-actions { margin-top: 12px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+
+        /* MANUEL STEPPER KONTROL PANELİ BAŞLIĞI */
+        .controls-card { background: #0f172a; padding: 18px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #334155; text-align: center; }
+        .controls-card h3 { font-size: 1rem; color: #f1f5f9; margin-bottom: 8px; margin-top: 12px; }
+
+        /* CHECKBOX SEÇENEĞİ VE BORD NO SELECT */
+        .checkbox-container { display: inline-flex; align-items: center; gap: 10px; background: #1e293b; padding: 10px 16px; border-radius: 8px; border: 1px solid #0284c7; margin-bottom: 12px; cursor: pointer; user-select: none; }
+        .checkbox-container input[type="checkbox"] { width: 18px; height: 18px; accent-color: #38bdf8; cursor: pointer; }
+        .checkbox-container span { font-size: 0.95rem; font-weight: 600; color: #38bdf8; }
+
+        .board-select-container { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px; }
+        .board-select-container label { font-size: 0.95rem; font-weight: 600; color: #f1f5f9; }
+        .board-select { background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; padding: 8px 16px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; outline: none; }
+        .board-select option { background: #0f172a; color: #f0f4f8; }
+
+        /* STEPPER STİLİ (+ - BUTONLAR) */
+        .control-group-inline { width: 100%; margin: 8px 0; display: flex; justify-content: center; }
+        .stepper-control { display: inline-flex; align-items: center; justify-content: space-between; background: #2b3544; border-radius: 8px; overflow: hidden; border: 1px solid #334155; width: 100%; max-width: 220px; }
+        .stepper-btn { background: #2b3544; color: #ffffff; border: none; padding: 8px 16px; font-size: 1.3rem; font-weight: bold; cursor: pointer; user-select: none; transition: background 0.2s; flex: 1; }
+        .stepper-btn:hover { background: #3b4758; }
+        .stepper-btn:active { background: #0284c7; }
+        .stepper-val { background: #ffffff; color: #000000; padding: 6px 12px; font-weight: bold; font-size: 1.1rem; min-width: 60px; text-align: center; flex: 1; }
+
+        /* UYARI BANNERI */
+        .status-banner { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.95rem; text-align: center; }
+        .status-info { background: #0f172a; border: 1px solid #38bdf8; color: #7dd3fc; }
+        .status-success { background: #064e3b; border: 1px solid #10b981; color: #6ee7b7; }
+
+        /* KADRAJ GRID DÜZENİ */
+        .table-grid { display: flex; flex-direction: column; align-items: center; gap: 15px; margin: 20px 0; }
+        .grid-middle-row { display: flex; justify-content: center; gap: 15px; width: 100%; flex-wrap: wrap; }
+
+        .crop-card { background: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 12px; width: 280px; display: flex; flex-direction: column; align-items: center; transition: all 0.2s; }
+        .crop-card.is-north { border: 2px solid #38bdf8; box-shadow: 0 0 12px rgba(56, 189, 248, 0.3); }
+        .crop-card.is-assigned { border: 1px solid #10b981; }
+
+        .region-label { font-size: 0.85rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; margin-bottom: 6px; }
+
+        /* YÖN ETİKETLERİ */
+        .dir-badge { font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; margin-bottom: 8px; }
+        .dir-badge.unassigned { background: #334155; color: #94a3b8; }
+        .dir-badge.badge-N { background: #0284c7; color: #fff; }
+        .dir-badge.badge-E { background: #d97706; color: #fff; }
+        .dir-badge.badge-S { background: #16a34a; color: #fff; }
+        .dir-badge.badge-W { background: #9333ea; color: #fff; }
+
+        /* GÖRSEL BOYUT KISITLAMASI */
+        .crop-preview-img { width: 100%; max-height: 200px; object-fit: contain; border-radius: 6px; border: 1px solid #0f172a; background: #090d16; margin: 8px 0 4px 0; display: block; }
+
+        .btn-set-north { background: #0f172a; color: #38bdf8; border: 1px solid #38bdf8; padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; width: 100%; margin-top: 6px; transition: all 0.2s; }
+        .btn-set-north:hover { background: #38bdf8; color: #0f172a; }
+
+        .info-box { background: #1e293b; border-left: 4px solid #38bdf8; padding: 15px; border-radius: 4px; margin-top: 25px; font-size: 0.9rem; color: #cbd5e1; }
+        .info-box ul { margin-left: 20px; margin-top: 8px; }
+        .info-box li { margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Briç Masa Fotoğrafı Kırpma Aracı <span class="badge">v1.5</span></h1>
+            <p class="subtitle">Tek kare masa fotoğrafını NORTH, EAST, SOUTH, WEST bölgelerine ayırıp indirin.</p>
+        </header>
+
+        <div class="panel">
+            <div class="upload-area">
+                <div class="btn-upload" onclick="document.getElementById('imageInput').click()">📁 Hafızadan Fotoğraf Seç</div>
+                <input type="file" id="imageInput" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
+                <button class="btn" style="margin-top: 12px;" onclick="startCamera()">📷 Arka Kamera İle Çek</button>
+                <span class="upload-hint">4 eli içeren tek kare masa fotoğrafını yükleyin veya canlı çekin.</span>
+            </div>
+
+            <!-- ARKA KAMERA CANLI YAYIN VE ÖNİZLEME ALANI -->
+            <div class="camera-panel" id="cameraPanel">
+                <video id="cameraVideo" class="camera-video" autoplay playsinline></video>
+                <img id="cameraPreviewImg" class="camera-preview-captured" style="display:none;" alt="Çekilen Fotoğraf">
+                
+                <div class="camera-actions">
+                    <button id="btnCapture" class="btn" onclick="takeSnapshot()">📸 Fotoğraf Çek</button>
+                    <button id="btnAccept" class="btn btn-success" style="display:none;" onclick="acceptSnapshot()">✅ Tamam</button>
+                    <button id="btnRetake" class="btn" style="display:none; background:#d97706;" onclick="retakeSnapshot()">🔄 Yeniden Çek</button>
+                    <button class="btn" style="background:#dc2626;" onclick="stopCamera()">❌ İptal</button>
+                </div>
+            </div>
+
+            <!-- MANUEL KONTROL PANELİ, CHECKBOX VE BORD NO SELECT -->
+            <div class="controls-card" id="controlsCard" style="display: none;">
+                <div>
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="chkAutoRotate" checked onchange="updateCrops()">
+                        <span>🔄 Kart Yönlerini Otomatik Hizala (Tüm elleri kuzey yönüne döndür)</span>
+                    </label>
+                </div>
+
+                <!-- BORD NO SEÇİM KUTUSU (1 - 40) -->
+                <div class="board-select-container">
+                    <label for="selectBoardNo">📋 Bord No Seçin:</label>
+                    <select id="selectBoardNo" class="board-select">
+                        <!-- Options 1..40 JS ile dolduruluyor -->
+                    </select>
+                </div>
+
+                <h3>⚙️ Kırpma Oranları ve Örtüşme Payları (Canlı Ayar)</h3>
+                <input type="hidden" id="sliderTop" value="38">
+                <input type="hidden" id="sliderBottom" value="38">
+                <input type="hidden" id="sliderLeft" value="42">
+                <input type="hidden" id="sliderRight" value="42">
+                <p style="font-size:0.8rem; color:#94a3b8; margin-top: 4px; text-align:center;">* Oranları hemen altlarındaki +/- butonlarından canlı ayarlayabilirsiniz.</p>
+            </div>
+
+            <div id="statusBanner" class="status-banner status-info" style="display:none;">
+                ⚠️ Lütfen Kuzey (N) olan kutunun altındaki <strong>"🧭 Bu Kutu Kuzey (N)"</strong> butonuna tıklayın.
+            </div>
+
+            <!-- 4 BÖLGE KADRAJ GRIDI -->
+            <div class="table-grid" id="tableGrid" style="display: none;">
+                
+                <!-- 1. EN ÜSTTEKİ CANVAS: ALT BÖLGE (KUZEY / NORTH - Alt Yükseklik) -->
+                <div class="crop-card" id="cropCard-2">
+                    <span class="region-label">Alt Bölge</span>
+                    <span id="cropBadge-2" class="dir-badge unassigned">Seçilmedi</span>
+                    <img id="cropPrev-2" class="crop-preview-img" alt="Alt">
+                    
+                    <!-- KUZEY (+/-) BUTONU -->
+                    <div class="control-group-inline">
+                        <div class="stepper-control">
+                            <button class="stepper-btn" onclick="adjustValue('sliderBottom', -1, 20, 60)">-</button>
+                            <div class="stepper-val" id="valBottom">38%</div>
+                            <button class="stepper-btn" onclick="adjustValue('sliderBottom', 1, 20, 60)">+</button>
+                        </div>
+                    </div>
+
+                    <button class="btn-set-north" onclick="setNorthPosition(2)">🧭 Bu Kutu Kuzey (N)</button>
+                </div>
+
+                <!-- 2. CANVAS: ÜST BÖLGE (GÜNEY / SOUTH - Üst Yükseklik) -->
+                <div class="crop-card" id="cropCard-0">
+                    <span class="region-label">Üst Bölge</span>
+                    <span id="cropBadge-0" class="dir-badge unassigned">Seçilmedi</span>
+                    <img id="cropPrev-0" class="crop-preview-img" alt="Üst">
+                    
+                    <!-- GÜNEY (+/-) BUTONU -->
+                    <div class="control-group-inline">
+                        <div class="stepper-control">
+                            <button class="stepper-btn" onclick="adjustValue('sliderTop', -1, 20, 60)">-</button>
+                            <div class="stepper-val" id="valTop">38%</div>
+                            <button class="stepper-btn" onclick="adjustValue('sliderTop', 1, 20, 60)">+</button>
+                        </div>
+                    </div>
+
+                    <button class="btn-set-north" onclick="setNorthPosition(0)">🧭 Bu Kutu Kuzey (N)</button>
+                </div>
+
+                <!-- ORTA SATIR: SOL & SAĞ BÖLGELER -->
+                <div class="grid-middle-row">
+                    <!-- 3. CANVAS: SOL BÖLGE (DOĞU / EAST - Sol Genişlik) -->
+                    <div class="crop-card" id="cropCard-3">
+                        <span class="region-label">Sol Bölge</span>
+                        <span id="cropBadge-3" class="dir-badge unassigned">Seçilmedi</span>
+                        <img id="cropPrev-3" class="crop-preview-img" alt="Sol">
+                        
+                        <!-- DOĞU (+/-) BUTONU -->
+                        <div class="control-group-inline">
+                            <div class="stepper-control">
+                                <button class="stepper-btn" onclick="adjustValue('sliderLeft', -1, 20, 60)">-</button>
+                                <div class="stepper-val" id="valLeft">42%</div>
+                                <button class="stepper-btn" onclick="adjustValue('sliderLeft', 1, 20, 60)">+</button>
+                            </div>
+                        </div>
+
+                        <button class="btn-set-north" onclick="setNorthPosition(3)">🧭 Bu Kutu Kuzey (N)</button>
+                    </div>
+
+                    <!-- 4. CANVAS: SAĞ BÖLGE (BATI / WEST - Sağ Genişlik) -->
+                    <div class="crop-card" id="cropCard-1">
+                        <span class="region-label">Sağ Bölge</span>
+                        <span id="cropBadge-1" class="dir-badge unassigned">Seçilmedi</span>
+                        <img id="cropPrev-1" class="crop-preview-img" alt="Sağ">
+                        
+                        <!-- BATI (+/-) BUTONU -->
+                        <div class="control-group-inline">
+                            <div class="stepper-control">
+                                <button class="stepper-btn" onclick="adjustValue('sliderRight', -1, 20, 60)">-</button>
+                                <div class="stepper-val" id="valRight">42%</div>
+                                <button class="stepper-btn" onclick="adjustValue('sliderRight', 1, 20, 60)">+</button>
+                            </div>
+                        </div>
+
+                        <button class="btn-set-north" onclick="setNorthPosition(1)">🧭 Bu Kutu Kuzey (N)</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <button id="btnDownload" class="btn btn-success btn-large" disabled onclick="downloadAllCrops()">
+                ⬇️ 4 Bölgeyi de İndir (Tüm Yönler)
+            </button>
+        </div>
+
+        <div class="info-box">
+            <strong>📌 Kullanım Notları:</strong>
+            <ul>
+                <li>İndirilen dosyalar seçtiğiniz Bord No'ya ve yöne göre dinamik olarak <code>bordno_1_NORTH_crop.jpg</code>, <code>bordno_1_EAST_crop.jpg</code> vb. şeklinde adlandırılır.</li>
+                <li>Otomatik döndürme seçeneği işaretliyken Güney eli 180°, Doğu eli sola 90°, Batı eli sağa 90° döndürülerek hepsi Kuzey açısına hizalanır.</li>
+                <li>Eğer bir kart kenardan kesiliyorsa, doğrudan o resmin altındaki <code>+</code> ve <code>-</code> butonlarını kullanarak canlı ayar yapabilirsiniz.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const dirNames = ['N', 'E', 'S', 'W'];
+        const dirLabels = { N: 'KUZEY (N)', E: 'DOĞU (E)', S: 'GÜNEY (S)', W: 'BATI (W)' };
+        const dirFileSuffix = { N: 'NORTH', E: 'EAST', S: 'SOUTH', W: 'WEST' };
+
+        let loadedImage = null;
+        let activeNorthIndex = null;
+        const boxCanvases = [null, null, null, null];
+        const boxAssignedDirs = [null, null, null, null];
+
+        let cameraStream = null;
+        let tempCapturedDataUrl = null;
+
+        // BORD NO SELECT DOLDURMA (1 - 40)
+        window.addEventListener('DOMContentLoaded', () => {
+            const select = document.getElementById('selectBoardNo');
+            for (let i = 1; i <= 40; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `Bord ${i}`;
+                select.appendChild(opt);
+            }
+        });
+
+        // HARİCİ DOSYA YÜKLEME
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const img = new Image();
+                img.onload = function() {
+                    loadedImage = img;
+                    document.getElementById('controlsCard').style.display = 'block';
+                    document.getElementById('tableGrid').style.display = 'flex';
+                    document.getElementById('statusBanner').style.display = 'block';
+                    updateCrops();
+                    resetDirections();
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // CANLI KAMERA FONKSİYONLARI
+        async function startCamera() {
+            stopCamera();
+            const cameraPanel = document.getElementById('cameraPanel');
+            const video = document.getElementById('cameraVideo');
+            const previewImg = document.getElementById('cameraPreviewImg');
+            
+            previewImg.style.display = 'none';
+            video.style.display = 'block';
+            cameraPanel.style.display = 'block';
+
+            document.getElementById('btnCapture').style.display = 'inline-block';
+            document.getElementById('btnAccept').style.display = 'none';
+            document.getElementById('btnRetake').style.display = 'none';
+
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "environment" } }
+                });
+            } catch (err) {
+                try {
+                    cameraStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: "environment" }
+                    });
+                } catch (fallbackErr) {
+                    try {
+                        cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    } catch (finalErr) {
+                        alert("Kameraya erişilemedi: " + finalErr.message);
+                        cameraPanel.style.display = 'none';
+                        return;
+                    }
+                }
+            }
+            video.srcObject = cameraStream;
+        }
+
+        function takeSnapshot() {
+            const video = document.getElementById('cameraVideo');
+            const previewImg = document.getElementById('cameraPreviewImg');
+            
+            if (!video.videoWidth) return;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            tempCapturedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+            previewImg.src = tempCapturedDataUrl;
+
+            video.style.display = 'none';
+            previewImg.style.display = 'block';
+
+            document.getElementById('btnCapture').style.display = 'none';
+            document.getElementById('btnAccept').style.display = 'inline-block';
+            document.getElementById('btnRetake').style.display = 'inline-block';
+        }
+
+        function retakeSnapshot() {
+            const video = document.getElementById('cameraVideo');
+            const previewImg = document.getElementById('cameraPreviewImg');
+
+            previewImg.style.display = 'none';
+            video.style.display = 'block';
+
+            document.getElementById('btnCapture').style.display = 'inline-block';
+            document.getElementById('btnAccept').style.display = 'none';
+            document.getElementById('btnRetake').style.display = 'none';
+        }
+
+        function acceptSnapshot() {
+            if (!tempCapturedDataUrl) return;
+
+            const img = new Image();
+            img.onload = function() {
+                loadedImage = img;
+                stopCamera();
+                document.getElementById('controlsCard').style.display = 'block';
+                document.getElementById('tableGrid').style.display = 'flex';
+                document.getElementById('statusBanner').style.display = 'block';
+                updateCrops();
+                resetDirections();
+            };
+            img.src = tempCapturedDataUrl;
+        }
+
+        function stopCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            document.getElementById('cameraPanel').style.display = 'none';
+        }
+
+        // STEPPER (+ -) DEĞER DEĞİŞTİRME YARDIMCISI
+        function adjustValue(sliderId, delta, min, max) {
+            const input = document.getElementById(sliderId);
+            if (!input) return;
+            let current = parseInt(input.value) || min;
+            current = Math.max(min, Math.min(max, current + delta));
+            input.value = current;
+            updateCrops();
+        }
+
+        // KIRPMA HESAPLAMASI VE DÖNDÜRME İŞLEMİ
+        function updateCrops() {
+            if (!loadedImage) return;
+
+            const topPct = parseInt(document.getElementById('sliderTop').value) / 100;
+            const bottomPct = parseInt(document.getElementById('sliderBottom').value) / 100;
+            const leftPct = parseInt(document.getElementById('sliderLeft').value) / 100;
+            const rightPct = parseInt(document.getElementById('sliderRight').value) / 100;
+
+            document.getElementById('valTop').innerText = Math.round(topPct * 100) + '%';
+            document.getElementById('valBottom').innerText = Math.round(bottomPct * 100) + '%';
+            document.getElementById('valLeft').innerText = Math.round(leftPct * 100) + '%';
+            document.getElementById('valRight').innerText = Math.round(rightPct * 100) + '%';
+
+            const w = loadedImage.naturalWidth;
+            const h = loadedImage.naturalHeight;
+
+            const cropSpecs = [
+                { x: 0, y: 0, width: w, height: topPct * h },                          // Box 0 (Üst)
+                { x: (1 - rightPct) * w, y: 0.18 * h, width: rightPct * w, height: 0.64 * h }, // Box 1 (Sağ)
+                { x: 0, y: (1 - bottomPct) * h, width: w, height: bottomPct * h },     // Box 2 (Alt)
+                { x: 0, y: 0.18 * h, width: leftPct * w, height: 0.64 * h }            // Box 3 (Sol)
+            ];
+
+            const autoRotate = document.getElementById('chkAutoRotate').checked;
+
+            for (let i = 0; i < 4; i++) {
+                const spec = cropSpecs[i];
+                const cropW = Math.round(spec.width);
+                const cropH = Math.round(spec.height);
+
+                // 1. Ham kırpma canvas'ı
+                const srcCanvas = document.createElement('canvas');
+                srcCanvas.width = cropW;
+                srcCanvas.height = cropH;
+                const srcCtx = srcCanvas.getContext('2d');
+                srcCtx.drawImage(
+                    loadedImage,
+                    Math.round(spec.x), Math.round(spec.y), cropW, cropH,
+                    0, 0, cropW, cropH
+                );
+
+                // Döndürme açısı hesabı
+                let angle = 0; // Radyan cinsinden
+                const dir = boxAssignedDirs[i];
+
+                if (autoRotate && dir) {
+                    if (dir === 'N') angle = 0;
+                    else if (dir === 'S') angle = Math.PI;             // 180° (2 kez sağa 90°)
+                    else if (dir === 'E') angle = -Math.PI / 2;        // -90° (1 kez sola 90°)
+                    else if (dir === 'W') angle = Math.PI / 2;         // +90° (1 kez sağa 90°)
+                }
+
+                // 2. Hedef döndürülmüş canvas
+                const targetCanvas = document.createElement('canvas');
+                if (angle === Math.PI / 2 || angle === -Math.PI / 2) {
+                    targetCanvas.width = cropH;
+                    targetCanvas.height = cropW;
+                } else {
+                    targetCanvas.width = cropW;
+                    targetCanvas.height = cropH;
+                }
+
+                const ctx = targetCanvas.getContext('2d');
+                ctx.translate(targetCanvas.width / 2, targetCanvas.height / 2);
+                ctx.rotate(angle);
+                ctx.drawImage(srcCanvas, -cropW / 2, -cropH / 2);
+
+                boxCanvases[i] = targetCanvas;
+                document.getElementById(`cropPrev-${i}`).src = targetCanvas.toDataURL('image/jpeg', 0.92);
+            }
+        }
+
+        function resetDirections() {
+            activeNorthIndex = null;
+            for (let i = 0; i < 4; i++) {
+                boxAssignedDirs[i] = null;
+                const card = document.getElementById(`cropCard-${i}`);
+                const badge = document.getElementById(`cropBadge-${i}`);
+                
+                if (card) card.className = 'crop-card';
+                if (badge) {
+                    badge.className = 'dir-badge unassigned';
+                    badge.innerText = 'Seçilmedi';
+                }
+            }
+            document.getElementById('btnDownload').disabled = true;
+            
+            const banner = document.getElementById('statusBanner');
+            banner.className = 'status-banner status-info';
+            banner.innerHTML = '⚠️ Lütfen Kuzey (N) olan kutunun altındaki <strong>"🧭 Bu Kutu Kuzey (N)"</strong> butonuna tıklayın.';
+            updateCrops();
+        }
+
+        function setNorthPosition(northIndex) {
+            activeNorthIndex = northIndex;
+
+            for (let k = 0; k < 4; k++) {
+                const boxIdx = (northIndex + k) % 4;
+                const dir = dirNames[k];
+                boxAssignedDirs[boxIdx] = dir;
+
+                const card = document.getElementById(`cropCard-${boxIdx}`);
+                const badge = document.getElementById(`cropBadge-${boxIdx}`);
+
+                if (card) card.className = boxIdx === northIndex ? 'crop-card is-north' : 'crop-card is-assigned';
+                if (badge) {
+                    badge.className = `dir-badge badge-${dir}`;
+                    badge.innerText = dirLabels[dir];
+                }
+            }
+
+            // Yönler atandıktan sonra döndürmeleri uygula
+            updateCrops();
+
+            document.getElementById('btnDownload').disabled = false;
+
+            const banner = document.getElementById('statusBanner');
+            banner.className = 'status-banner status-success';
+            banner.innerHTML = '✅ Kuzey belirlendi! Otomatik hizalama seçeneği aktifse görseller Kuzey açısına döndürüldü.';
+        }
+
+        async function downloadAllCrops() {
+            if (activeNorthIndex === null) return;
+
+            const boardNo = document.getElementById('selectBoardNo').value || '1';
+            const downloadBtn = document.getElementById('btnDownload');
+            downloadBtn.disabled = true;
+            downloadBtn.innerText = '⏳ Fotoğraflar İndiriliyor...';
+
+            for (let i = 0; i < 4; i++) {
+                const canvas = boxCanvases[i];
+                const dir = boxAssignedDirs[i];
+                if (!canvas || !dir) continue;
+
+                const fileName = `bordno_${boardNo}_${dirFileSuffix[dir]}_crop.jpg`;
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+                const link = document.createElement('a');
+                link.href = dataUrl;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+
+            downloadBtn.disabled = false;
+            downloadBtn.innerText = '⬇️ 4 Bölgeyi de İndir (Tüm Yönler)';
+        }
+    </script>
+</body>
+</html>
