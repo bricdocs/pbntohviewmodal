@@ -179,7 +179,7 @@
             <button class="btn-action btn-download-single" onclick="downloadSinglePbn()">💾 Bord PBN ve Arşiv İndir</button>
         </div>
 
-        <div class="inspector-title">🔍 Hızlı Kontrol - Briç Eli Görünümü Bord No: </div>\${boardNo}
+        <div class="inspector-title">🔍 Hızlı Kontrol - Briç Eli Görünümü Bord No: <span id="cembno"></span></div>
         <div class="inspector-grid" id="handsInspector"></div>
     </div>
 
@@ -607,6 +607,8 @@
                 
                 renderHumanReadableHands(parsedResults);
 
+                //yeni ekledim
+                document.getElementById('cembno').value = boardNo;
                 resultPanel.style.display = 'block';
                 status.innerText = "✅ İşlem Başarıyla Tamamlandı!";
 
