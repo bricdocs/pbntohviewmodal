@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PBN to BBO Handviewer</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; margin: 20px; max-width: 900px; background-color: #f8f9fa; color: #333; }
+        h2 { color: #2c3e50; }
+        textarea { width: 100%; height: 140px; margin-bottom: 10px; padding: 10px; font-family: monospace; border: 1px solid #ccc; border-radius: 4px; resize: vertical; }
+        input[type="file"] { margin-bottom: 10px; display: block; }
+        button { padding: 10px 18px; font-size: 15px; cursor: pointer; border: none; border-radius: 4px; transition: background 0.2s; margin-right: 8px; margin-bottom: 8px; }
+        .btn-primary { background-color: #3498db; color: white; }
+        .btn-primary:hover { background-color: #2980b9; }
+        .btn-popup { background-color: #8e44ad; color: white; }
+        .btn-popup:hover { background-color: #732d91; }
+        .btn-modal { background-color: #27ae60; color: white; }
+        .btn-modal:hover { background-color: #219150; }
+        .result { margin-top: 20px; background: #fff; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .section { margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; }
+        
+        /* MODAL STİLLERİ */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.85);
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+        }
+        .modal-content {
+            background-color: #1a1a1a;
+            width: 96vw;
+            height: 92vh;
+            max-width: 1200px;
+            max-height: 900px;
+            border-radius: 8px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+        .modal-header {
+            padding: 10px 18px;
+            background: #2c3e50;
+            color: #fff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+        }
+        .close-btn {
+            background: #e74c3c;
+            border: none;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 5px 12px;
+            border-radius: 4px;
+        }
+        .close-btn:hover { background: #c0392b; }
+        .modal-body { flex: 1; width: 100%; height: 100%; background-color: #000; }
+        .modal-body iframe { width: 100%; height: 100%; border: none; display: block; }
+    </style>
+</head>
+<body>
+
+    <h2>PBN to BBO Handviewer Converter</h2>
+    
+    <div class="section">
+        <label><strong>1. Yol: PBN Dosyası Yükle (PC veya Mobil)</strong></label>
+        <input type="file" id="pbnFile" accept=".pbn,.txt" onchange="loadPBNFile(event)">
+    </div>
+
+    <div class="section">
+        <label><strong>2. Yol: PBN Verisini Yapıştır</strong></label>
+        <textarea id="pbnInput" placeholder="PBN içeriğini buraya yapıştırın..."></textarea>
+        <button class="btn-primary" onclick="convertToBBO()">BBO Linki Oluştur & Küçük Pencerede Aç</button>
+    </div>
+
+    <div class="result" id="resultArea">
+        <strong>İşlem Sonucu:</strong> <br><br>
+        <div id="actionButtons" style="display: none;">
+            <button class="btn-popup" onclick="openPopupWindow()">Küçük Pencerede Aç (Popup)</button>
+            <button class="btn-modal" onclick="openModalFromCurrentLink()">Modal İçinde Aç</button>
+            <a id="bboDirectLink" href="#" target="_blank" style="margin-left: 10px;">Yeni Sekmede Tam Ekran</a>
+        </div>
+        <span id="statusText">Lütfen PBN dosyası seçin veya içeriğini yapıştırın.</span>
+    </div>
+
+    <!-- MODAL PENCERE (Alternatif Seçenek) -->
+    <div id="bboModal" class="modal-overlay" onclick="closeModalOnOverlay(event)">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>BBO Handviewer</span>
+                <button class="close-btn" onclick="closeModal()">Kapat X</button>
+            </div>
+            <div class="modal-body">
+                <iframe id="bboIframe" src="" allowfullscreen></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let generatedUrl = "";
+
+        function loadPBNFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('pbnInput').value = e.target.result;
+            };
+            reader.readAsText(file);
+        }
+
+        function pbnHandToBboHand(pbnHand) {
+            if (!pbnHand) return "";
+            const suits = pbnHand.split('.');
+            const s = suits[0] || "";
+            const h = suits[1] || "";
+            const d = suits[2] || "";
+            const c = suits[3] || "";
+            return `S${s}H${h}D${d}C${c}`;
+        }
+
+        function convertToBBO() {
+            const pbnText = document.getElementById('pbnInput').value;
+            
+            const dealMatch = pbnText.match(/\[Deal\s+"([^"]+)"\]/);
+            if (!dealMatch) {
+                alert("PBN verisinde [Deal ...] alanı bulunamadı!");
+                return;
+            }
+
+            let dealValue = dealMatch[1].trim();
+            let startSeat = "N"; 
+            let handsPart = dealValue;
+
+            if (dealValue.includes(":")) {
+                let parts = dealValue.split(":");
+                startSeat = parts[0].trim().toUpperCase();
+                handsPart = parts[1].trim();
+            }
+
+            let rawHands = handsPart.split(/\s+/);
+            if (rawHands.length !== 4) {
+                alert("Deal verisinde 4 el bulunamadı!");
+                return;
+            }
+
+            const seats = ["N", "E", "S", "W"];
+            let startIndex = seats.indexOf(startSeat);
+            if (startIndex === -1) startIndex = 0;
+
+            let handBySeat = {};
+            for (let i = 0; i < 4; i++) {
+                let seat = seats[(startIndex + i) % 4];
+                handBySeat[seat] = rawHands[i];
+            }
+
+            let bboNorth = pbnHandToBboHand(handBySeat["N"]);
+            let bboEast  = pbnHandToBboHand(handBySeat["E"]);
+            let bboSouth = pbnHandToBboHand(handBySeat["S"]);
+            let bboWest  = pbnHandToBboHand(handBySeat["W"]);
+
+            let mdString = `1${bboNorth},${bboEast},${bboSouth},${bboWest}`;
+
+            const boardMatch = pbnText.match(/\[Board\s+"([^"]+)"\]/);
+            const boardNum = boardMatch ? boardMatch[1].trim() : "0";
+
+            const linData = `pn||||st||md|${mdString}|sv|o|rh||ah|Board ${boardNum}|mb|4h|mb|p|mb|p|mb|p|`;
+            const encodedLin = encodeURIComponent(linData);
+            
+            generatedUrl = `https://www.bridgebase.com/tools/handviewer.html?v3b=web&v3v=6.61.5&lin=${encodedLin}`;
+
+            document.getElementById('statusText').style.display = 'none';
+            document.getElementById('actionButtons').style.display = 'block';
+            document.getElementById('bboDirectLink').href = generatedUrl;
+            
+            // Link oluştuğunda otomatik küçük pencerede aç
+            openPopupWindow();
+        }
+
+        // KÜÇÜK PENCERE (POPUP) AÇMA FONKSİYONU
+        function openPopupWindow() {
+            if (!generatedUrl) return;
+
+            const width = 900;
+            const height = 650;
+            
+            // Pencereyi ekranın tam ortasına konumlandırma
+            const left = (screen.width - width) / 2;
+            const top = (screen.height - height) / 2;
+
+            window.open(
+                generatedUrl, 
+                'BBOHandviewerPopup', 
+                `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=no,status=no,toolbar=no,menubar=no`
+            );
+        }
+
+        // Modal Fonksiyonları
+        function openModal(url) {
+            document.getElementById('bboIframe').src = url;
+            document.getElementById('bboModal').style.display = 'flex';
+        }
+
+        function openModalFromCurrentLink() {
+            if (generatedUrl) openModal(generatedUrl);
+        }
+
+        function closeModal() {
+            document.getElementById('bboModal').style.display = 'none';
+            document.getElementById('bboIframe').src = "";
+        }
+
+        function closeModalOnOverlay(event) {
+            if (event.target.id === "bboModal") {
+                closeModal();
+            }
+        }
+    </script>
+
+</body>
+</html>
