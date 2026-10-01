@@ -321,49 +321,57 @@ aciSlider.addEventListener('input', (e) => {
     TumunuCiz();
 });
 
-// Canvasları Ekrana Çizen Ana Fonksiyon (Dönme ve Hizalama Hatası Giderildi)
+// Yeni Yön Oryantasyonuna Uyumlu Çizim Fonksiyonu
 function TumunuCiz() {
     if (!anaGorsel.src) return;
     ['alt', 'ust', 'sol', 'sag'].forEach(bolge => {
         const tuval = document.getElementById('tuval_' + bolge);
         const ctx = tuval.getContext('2d');
         const c = kesimler[bolge];
+        const yonu = yonHaritasi[bolge];
 
-        tuval.width = c.w;
-        tuval.height = c.h;
+        // Kullanıcı pusulayı seçtiyse her yönün kart düzeltme açısını hesapla
+        let yonAcisi = 0;
+        if (secilenKuzeyBolgesi) {
+            if (yonu === "SOUTH") yonAcisi = Math.PI;          // 180 derece
+            else if (yonu === "EAST") yonAcisi = Math.PI / 2;   // 90 derece sağa
+            else if (yonu === "WEST") yonAcisi = -Math.PI / 2;  // 90 derece sola
+        }
+
+        // Eğer Doğu veya Batı yönündeyse dikey kartları yatay ekranda düz görebilmek için canvas boyutlarını takas et
+        if (secilenKuzeyBolgesi && (yonu === "EAST" || yonu === "WEST")) {
+            tuval.width = c.h;
+            tuval.height = c.w;
+        } else {
+            tuval.width = c.w;
+            tuval.height = c.h;
+        }
 
         ctx.clearRect(0, 0, tuval.width, tuval.height);
 
         ctx.save();
-        // 1. ADIM: Her bölgenin kendi canvas merkezine konumlan
+        // Canvas merkezine yerleş
         ctx.translate(tuval.width / 2, tuval.height / 2);
         
-        // 2. ADIM: Masa Genel Eğrilik Açısını uygula
-        ctx.rotate(aci);
+        // Masa Genel Eğrilik Açısı + Pusula Yön Otomatik Döndürmesini birlikte uygula
+        ctx.rotate(aci + yonAcisi);
         
-        // 3. ADIM: Matematiksel Merkez Hizalaması
-        // Her bölgenin ham resimdeki orijinal merkez noktasını bulup rotasyonu o eksene kilitliyoruz
         const orijinalBölgeMerkezX = c.xSrc + c.w / 2;
         const orijinalBölgeMerkezY = c.ySrc + c.h / 2;
         
         const dx = orijinalBölgeMerkezX - anaGorsel.width / 2;
         const dy = orijinalBölgeMerkezY - anaGorsel.height / 2;
         
-        ctx.drawImage(
-            anaGorsel, 
-            -anaGorsel.width / 2 - dx, 
-            -anaGorsel.height / 2 - dy
-        );
+        ctx.drawImage(anaGorsel, -anaGorsel.width / 2 - dx, -anaGorsel.height / 2 - dy);
         ctx.restore();
 
-        // 4. ADIM: Kenardan Çekme Kırpma Maskesini (Koyu Şeffaf Alan) Çiz
+        // Kırpma alanını (Yeşil çizgileri) her zaman kullanıcının önünde düz duracak şekilde sınırla
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         ctx.fillRect(0, 0, tuval.width, c.ust);
         ctx.fillRect(0, tuval.height - c.alt, tuval.width, c.alt);
         ctx.fillRect(0, c.ust, c.sol, tuval.height - c.ust - c.alt);
         ctx.fillRect(tuval.width - c.sag, c.ust, c.sag, tuval.height - c.ust - c.alt);
 
-        // 5. ADIM: Kullanıcının Çekeceği Yeşil Kırpma Çizgisini Çiz
         ctx.strokeStyle = '#00e676';
         ctx.lineWidth = Math.max(3, tuval.width * 0.006);
         ctx.strokeRect(c.sol, c.ust, tuval.width - c.sol - c.sag, tuval.height - c.ust - c.alt);
@@ -402,17 +410,18 @@ function SuruklemeBasladi(bolge, e) {
     else if (mSag < dTol) aktifDurum = { bolge, kenar: 'sag' };
 }
 
-// Sürükleme Devam Ederken Sınırları Canlı Güncelle
+// Sürükleme Hareketini Dönmüş Canvas Düzenine Adapte Eden Fonksiyon
 function SuruklemeHareket(e) {
     if (!aktifDurum.bolge) return;
     if (e.cancelable) e.preventDefault();
 
     const bolge = aktifDurum.bolge;
     const tuval = document.getElementById('tuval_' + bolge);
-    const pos = SürüklemeKoordinatAl(e, tuval);
+    const pos = SuruklemeKoordinatAl(e, tuval);
     const c = kesimler[bolge];
-    const limit = 30; // Kırpma alanının tamamen sıfırlanmaması için minimum koruma genişliği
+    const limit = 30;
 
+    // Yeşil çizgileri sürüklerken parmak hareketinin canvasın güncel fiziksel yönüyle eşleşmesini sağlar
     if (aktifDurum.kenar === 'ust') {
         c.ust = Math.max(0, Math.min(pos.y, tuval.height - c.alt - limit));
     } else if (aktifDurum.kenar === 'alt') {
@@ -442,7 +451,7 @@ window.addEventListener('touchmove', SuruklemeHareket, { passive: false });
 window.addEventListener('mouseup', SuruklemeBitti);
 window.addEventListener('touchend', SuruklemeBitti);
 
-// Memnun Olduğunuz Orijinal Pusula Yön Atama Mantığı
+// Kullanıcı Kuzey Seçimi Yaptığı Anda Tetiklenen Fonksiyon (Canvasları Anında Döndürür)
 function KuzeyAtasınıSec(secilenBolge) {
     secilenKuzeyBolgesi = secilenBolge;
     
@@ -466,13 +475,15 @@ function KuzeyAtasınıSec(secilenBolge) {
         etiket.innerText = "🧭 Pusula Yönü: " + yonHaritasi[b];
         baslik.innerText = orijinalAd + " Bölgesi (" + yonHaritasi[b] + ")";
         
-        // Kuzey kutusunu görsel olarak vurgula
         if (yonHaritasi[b] === "NORTH") {
             etiket.style.color = "#00c853";
         } else {
             etiket.style.color = "#0088cc";
         }
     });
+
+    // CRITICAL: Seçim yapıldığı an tüm canvasları yeni yön açılarıyla yeniden çizdirir
+    TumunuCiz();
 }
 
 // 4 Bölgenin Çıktısını Matematiksel Olarak Kusursuz Hesaplayan ve İndiren Fonksiyon
