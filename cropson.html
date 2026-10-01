@@ -349,7 +349,7 @@ function TumunuCiz() {
 }
 
 // Fare ve Dokunmatik Sürükleme Olay Kesişim Koordinat Hesaplaması
-function SürüklemeKoordinat Al(e, tuval) {
+function SürüklemeKoordinatAl(e, tuval) {
     const rect = tuval.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -363,7 +363,7 @@ function SürüklemeKoordinat Al(e, tuval) {
 function SuruklemeBasladi(bolge, e) {
     if (!anaGorsel.src) return;
     const tuval = document.getElementById('tuval_' + bolge);
-    const pos = SürüklemeKoordinat Al(e, tuval);
+    const pos = SürüklemeKoordinatAl(e, tuval);
     const c = kesimler[bolge];
 
     const mSol = Math.abs(pos.x - c.sol);
@@ -386,7 +386,7 @@ function SuruklemeHareket(e) {
 
     const bolge = aktifDurum.bolge;
     const tuval = document.getElementById('tuval_' + bolge);
-    const pos = SürüklemeKoordinat Al(e, tuval);
+    const pos = SürüklemeKoordinatAl(e, tuval);
     const c = kesimler[bolge];
     const limit = 30; // Kırpma alanının tamamen sıfırlanmaması için minimum koruma genişliği
 
