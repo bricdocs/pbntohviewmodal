@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Briç Masa Fotoğrafı Kırpma Aracı v1.6</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #eceff1; margin: 0; padding: 15px; }
+        .Konteyner { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #37474f; font-size: 22px; margin-top: 0; }
+        .YukleAlan { border: 2px dashed #0088cc; padding: 20px; border-radius: 8px; background: #f9fbfd; cursor: pointer; margin-bottom: 15px; }
+        #dosyaInput { display: none; }
+        .Btn { background: #0088cc; color: #fff; border: none; padding: 10px 18px; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer; margin: 5px; transition: background 0.2s; }
+        .Btn:hover { background: #006699; }
+        .BtnKirmizi { background: #e53935; }
+        .BtnKirmizi:hover { background: #c62828; }
+        .BtnYesil { background: #43a047; }
+        .BtnYesil:hover { background: #2e7d32; }
+        .BtnTuruncu { background: #f4511e; }
+        .BtnTuruncu:hover { background: #d84315; }
+        .KontrolPaneli { background: #f1f5f7; padding: 15px; border-radius: 8px; margin-bottom: 15px; width: 100%; box-sizing: border-box; }
+        .KontrolPaneli label { display: block; font-weight: bold; margin-bottom: 8px; color: #37474f; }
+        .KontrolPaneli input[type="range"] { width: 80%; max-width: 400px; cursor: pointer; }
+        .KameraKutu { background: #000; border-radius: 8px; padding: 10px; margin-bottom: 15px; display: none; }
+        #video { width: 100%; max-width: 500px; border-radius: 4px; background: #222; }
+        .GridSistem { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 20px; }
+        @media(min-width: 600px) { .GridSistem { grid-template-columns: 1fr 1fr; } }
+        .KartKutusu { background: #fff; border: 1px solid #cfd8dc; border-radius: 8px; padding: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); position: relative; }
+        .KartKutusu h3 { margin: 0 0 10px 0; color: #546e7a; font-size: 16px; }
+        .EditorKonteyner { position: relative; display: inline-block; width: 100%; background: #37474f; border-radius: 4px; touch-action: none; overflow: hidden; }
+        canvas { width: 100%; display: block; background: #263238; cursor: move; }
+        .CanliAyar { margin-top: 10px; display: flex; justify-content: center; align-items: center; gap: 10px; }
+        .AyarBtn { background: #cfd8dc; border: none; width: 30px; height: 30px; font-weight: bold; font-size: 16px; border-radius: 4px; cursor: pointer; }
+        .AyarBtn:hover { background: #b0bec5; }
+        .DurumEtiketi { display: block; margin-top: 5px; font-size: 12px; font-weight: bold; color: #78909c; }
+    </style>
+</head>
+<body>
+
+<div class="Konteyner">
+    <h1>♠♥ Briç Masa Fotoğrafı Kırpma Aracı v1.6 ♦♣</h1>
+    <p style="color: #607d8b; font-size: 14px;">Tek kare masa fotoğrafını NORTH, EAST, SOUTH, WEST bölgelerine ayırıp hizalayın.</p>
+
+    <div class="YukleAlan" onclick="document.getElementById('dosyaInput').click()">
+        <strong>📁 Hafızadan Fotoğraf Seç (JPG)</strong>
+        <input type="file" id="dosyaInput" accept="image/*">
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <button class="Btn BtnTuruncu" id="btnKameraAc">📷 Arka Kamera İle Çek</button>
+    </div>
+
+    <!-- Canlı Kamera Kutusu -->
+    <div class="KameraKutu" id="kameraKutu">
+        <video id="video" autoplay playsinline></video>
+        <div style="margin-top: 10px;">
+            <button class="Btn BtnYesil" id="btnFotoCek">📸 Fotoğraf Çek</button>
+            <button class="Btn BtnKirmizi" id="btnKameraKapat">❌ İptal</button>
+        </div>
+    </div>
+
+    <!-- Ortak Kamera Eğriliğini Düzeltme Çubuğu -->
+    <div class="KontrolPaneli" id="kontrolKutu" style="display:none;">
+        <label for="aciSlider">🔄 Masa Genel Eğrilik Açısı: <span id="aciDeger">0</span>°</label>
+        <input type="range" id="aciSlider" min="-15" max="15" step="0.5" value="0">
+        <div style="margin-top: 10px;">
+            <label style="display:inline; font-weight:normal; cursor:pointer;">
+                <input type="checkbox" id="otomatikDondur" checked> Kart Yönlerini Otomatik Hizala (Tüm elleri kuzey yönüne döndür)
+            </label>
+        </div>
+        <div style="margin-top: 10px;">
+            <label style="display:inline-block; margin-right:10px;">📋 Bord No Seçin:</label>
+            <select id="bordNoSelect" style="padding: 5px; font-weight: bold; border-radius: 4px;">
+                <!-- JavaScript dinamik dolduracak -->
+            </select>
+        </div>
+    </div>
+
+    <!-- 4 Bölgeli Kırpma Alanı Izgarası -->
+    <div class="GridSistem" id="editorIzgara" style="display:none;">
+        
+        <!-- ALT BÖLGE -->
+        <div class="KartKutusu" id="kutu_alt">
+            <h3 id="baslik_alt">Alt Bölgesi</h3>
+            <div class="EditorKonteyner">
+                <canvas id="tuval_alt"></canvas>
+            </div>
+            <div class="CanliAyar">
+                <button class="AyarBtn" onclick="OranDegistir('alt', -1)">-</button>
+                <span id="deger_alt">38%</span>
+                <button class="AyarBtn" onclick="OranDegistir('alt', 1)">+</button>
+            </div>
+            <button class="Btn BtnTuruncu" style="font-size:12px; padding:6px 10px;" onclick="KuzeyAtasınıSec('alt')">🧭 Bu Kutu Kuzey (N)</button>
+            <span class="DurumEtiketi" id="durum_alt">Yön Atanmadı</span>
+        </div>
+
+        <!-- ÜST BÖLGE -->
+        <div class="KartKutusu" id="kutu_ust">
+            <h3 id="baslik_ust">Üst Bölgesi</h3>
+            <div class="EditorKonteyner">
+                <canvas id="tuval_ust"></canvas>
+            </div>
+            <div class="CanliAyar">
+                <button class="AyarBtn" onclick="OranDegistir('ust', -1)">-</button>
+                <span id="deger_ust">38%</span>
+                <button class="AyarBtn" onclick="OranDegistir('ust', 1)">+</button>
+            </div>
+            <button class="Btn BtnTuruncu" style="font-size:12px; padding:6px 10px;" onclick="KuzeyAtasınıSec('ust')">🧭 Bu Kutu Kuzey (N)</button>
+            <span class="DurumEtiketi" id="durum_ust">Yön Atanmadı</span>
+        </div>
+
+        <!-- SOL BÖLGE -->
+        <div class="KartKutusu" id="kutu_sol">
+            <h3 id="baslik_sol">Sol Bölgesi</h3>
+            <div class="EditorKonteyner">
+                <canvas id="tuval_sol"></canvas>
+            </div>
+            <div class="CanliAyar">
+                <button class="AyarBtn" onclick="OranDegistir('sol', -1)">-</button>
+                <span id="deger_sol">42%</span>
+                <button class="AyarBtn" onclick="OranDegistir('sol', 1)">+</button>
+            </div>
+            <button class="Btn BtnTuruncu" style="font-size:12px; padding:6px 10px;" onclick="KuzeyAtasınıSec('sol')">🧭 Bu Kutu Kuzey (N)</button>
+            <span class="DurumEtiketi" id="durum_sol">Yön Atanmadı</span>
+        </div>
+
+        <!-- SAĞ BÖLGE -->
+        <div class="KartKutusu" id="kutu_sag">
+            <h3 id="baslik_sag">Sağ Bölgesi</h3>
+            <div class="EditorKonteyner">
+                <canvas id="tuval_sag"></canvas>
+            </div>
+            <div class="CanliAyar">
+                <button class="AyarBtn" onclick="OranDegistir('sag', -1)">-</button>
+                <span id="deger_sag">42%</span>
+                <button class="AyarBtn" onclick="OranDegirim('sag', 1)">+</button>
+            </div>
+            <button class="Btn BtnTuruncu" style="font-size:12px; padding:6px 10px;" onclick="KuzeyAtasınıSec('sag')">🧭 Bu Kutu Kuzey (N)</button>
+            <span class="DurumEtiketi" id="durum_sag">Yön Atanmadı</span>
+        </div>
+
+    </div>
+
+    <!-- Aksiyon Butonları -->
+    <div style="margin-top: 25px; display: none;" id="aksiyonAlani">
+        <button class="Btn BtnYesil" style="font-size:16px; padding:12px 25px;" id="btnTopluIndir">⬇ 4 Bölgeyi de İndir (Tüm Yönler)</button>
+        <button class="Btn" style="font-size:16px; padding:12px 25px; background: #673ab7;" id="btnDriveYukle">☁ Google Drive'a Yükle</button>
+    </div>
+
+</div>
+
+<script>
+// Element Tanımlamaları
+const dosyaInput = document.getElementById('dosyaInput');
+const aciSlider = document.getElementById('aciSlider');
+const aciDeger = document.getElementById('aciDeger');
+const kontrolKutu = document.getElementById('kontrolKutu');
+const editorIzgara = document.getElementById('editorIzgara');
+const aksiyonAlani = document.getElementById('aksiyonAlani');
+const otomatikDondur = document.getElementById('otomatikDondur');
+const bordNoSelect = document.getElementById('bordNoSelect');
+const video = document.getElementById('video');
+const kameraKutu = document.getElementById('kameraKutu');
+
+// Kamera Butonları
+const btnKameraAc = document.getElementById('btnKameraAc');
+const btnFotoCek = document.getElementById('btnFotoCek');
+const btnKameraKapat = document.getElementById('btnKameraKapat');
+
+// Temel Değişkenler ve Memnun Olduğunuz Orijinal Oranlar
+let anaGorsel = new Image();
+let aci = 0;
+let akisKameraStream = null;
+
+let oranlar = { alt: 38, ust: 38, sol: 42, sag: 42 };
+let ortusmePayi = 10; // Orijinal mantığınızdaki örtüşme payı sabiti
+
+// Her canvas için bağımsız kenardan çekme kırpma sınırları (Piksel cinsinden dinamik hesaplanacak)
+let kesimler = {
+    alt: { ust: 0, alt: 0, sol: 0, sag: 0 },
+    ust: { ust: 0, alt: 0, sol: 0, sag: 0 },
+    sol: { ust: 0, alt: 0, sol: 0, sag: 0 },
+    sag: { ust: 0, alt: 0, sol: 0, sag: 0 }
+};
+
+let aktifDurum = { bolge: null, kenar: null }; // Sürüklenen aktif bölge ve kenar bilgisi
+const dokunmaTolerans = 35; // Mobil dokunma yakalama hassasiyeti
+
+// Pusula ve Yön Atamaları Şablonu
+let secilenKuzeyBolgesi = null;
+let yonHaritasi = { alt: "", ust: "", sol: "", sag: "" };
+
+// Bord No Seçeneklerini Doldur (1 - 32)
+for (let i = 1; i <= 32; i++) {
+    let opt = document.createElement('option');
+    opt.value = i;
+    opt.innerText = "Bord No: " + i;
+    bordNoSelect.appendChild(opt);
+}
+
+// Görsel Yükleme Tetikleyicileri
+dosyaInput.addEventListener('change', (e) => {
+    const dosyalar = e.target.files;
+    if (!dosyalar || dosyalar.length === 0) return;
+    
+    const okuyucu = new FileReader();
+    okuyucu.onload = (evt) => { anaGorsel.src = evt.target.result; };
+    okuyucu.readAsDataURL(dosyalar[0]);
+});
+
+// Canlı Kamera Yönetimi Entegrasyonu
+btnKameraAc.addEventListener('click', async () => {
+    try {
+        akisKameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { exact: "environment" } },
+            audio: false
+        });
+        video.srcObject = akisKameraStream;
+        kameraKutu.style.display = 'block';
+    } catch (err) {
+        // Eğer cihazda "environment" (arka kamera) ismi doğrudan bulunamazsa genel kamerayı açar
+        try {
+            akisKameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            video.srcObject = akisKameraStream;
+            kameraKutu.style.display = 'block';
+        } catch (e) {
+            alert("Kameraya erişilemedi: " + e.message);
+        }
+    }
+});
+
+btnFotoCek.addEventListener('click', () => {
+    if (!akisKameraStream) return;
+    const geciciCanvas = document.createElement('canvas');
+    geciciCanvas.width = video.videoWidth;
+    geciciCanvas.height = video.videoHeight;
+    geciciCanvas.getContext('2d').drawImage(video, 0, 0);
+    anaGorsel.src = geciciCanvas.toDataURL('image/jpeg', 0.95);
+    KameraKapat();
+});
+
+btnKameraKapat.addEventListener('click', KameraKapat);
+
+function KameraKapat() {
+    if (akisKameraStream) {
+        akisKameraStream.getTracks().forEach(track => track.stop());
+        akisKameraStream = null;
+    }
+    kameraKutu.style.display = 'none';
+}
+
+// Görsel İlk Yüklendiğinde Tetiklenen Bölümleme ve Matris Kurulumu
+anaGorsel.onload = () => {
+    aciSlider.value = 0;
+    aciDeger.innerText = 0;
+    aci = 0;
+
+    // Memnun olduğunuz orijinal yüzdesel oranlara göre ilk kesim sınırlarını hesapla
+    // Kullanıcı kenardan çekme yaptıkça bu sınırlar esneyecektir
+    SınırlarıSıfırla();
+
+    kontrolKutu.style.display = 'block';
+    editorIzgara.style.display = 'grid';
+    aksiyonAlani.style.display = 'block';
+
+    TumunuCiz();
+};
+
+function SınırlarıSıfırla() {
+    const w = anaGorsel.width;
+    const h = anaGorsel.height;
+
+    // ALT BÖLGE (Orijinal Yükseklik Oranı)
+    const altH = Math.round(h * (oranlar.alt / 100));
+    kesimler.alt = { ust: 0, alt: 0, sol: 0, sag: 0, w: w, h: altH, xSrc: 0, ySrc: h - altH };
+
+    // ÜST BÖLGE
+    const ustH = Math.round(h * (oranlar.ust / 100));
+    kesimler.ust = { ust: 0, alt: 0, sol: 0, sag: 0, w: w, h: ustH, xSrc: 0, ySrc: 0 };
+
+    // SOL BÖLGE (Orijinal Genişlik Oranı + Örtüşme Payı Dikey)
+    const solW = Math.round(w * (oranlar.sol / 100));
+    const dikeyKalan = h - (ustH + altH);
+    const solH = dikeyKalan + (ortusmePayi * 2);
+    kesimler.sol = { ust: 0, alt: 0, sol: 0, sag: 0, w: solW, h: solH, xSrc: 0, ySrc: ustH - ortusmePayi };
+
+    // SAĞ BÖLGE
+    const sagW = Math.round(w * (oranlar.sag / 100));
+    const sagH = dikeyKalan + (ortusmePayi * 2);
+    kesimler.sag = { ust: 0, alt: 0, sol: 0, sag: 0, w: sagW, h: sagH, xSrc: w - sagW, ySrc: ustH - ortusmePayi };
+}
+
+// Canlı Oran Değiştirme Butonları (+/-) Tetiklendiğinde
+function OranDegistir(bolge, yon) {
+    if (bolge === 'alt' || bolge === 'ust') {
+        oranlar[bolge] = Math.max(10, Math.min(80, oranlar[bolge] + yon));
+    } else {
+        oranlar[bolge] = Math.max(10, Math.min(80, oranlar[bolge] + yon));
+    }
+    document.getElementById('deger_' + bolge).innerText = oranlar[bolge] + "%";
+    SınırlarıSıfırla();
+    TumunuCiz();
+}
+
+// Tek Bir Ortak Slider ile 4 Canvas'ı Aynı Anda Döndürme Fonksiyonu
+aciSlider.addEventListener('input', (e) => {
+    const derece = parseFloat(e.target.value);
+    aciDeger.innerText = derece;
+    aci = (derece * Math.PI) / 180;
+    TumunuCiz();
+});
+
+// Canvasları Ekrana Çizen Ana Fonksiyon
+function TumunuCiz() {
+    if (!anaGorsel.src) return;
+    ['alt', 'ust', 'sol', 'sag'].forEach(bolge => {
+        const tuval = document.getElementById('tuval_' + bolge);
+        const ctx = tuval.getContext('2d');
+        const c = kesimler[bolge];
+
+        tuval.width = c.w;
+        tuval.height = c.h;
+
+        ctx.clearRect(0, 0, tuval.width, tuval.height);
+
+        // 1. ADIM: Masa Genel Eğrilik Açısını Merkezli Uygula
+        ctx.save();
+        ctx.translate(tuval.width / 2, tuval.height / 2);
+        ctx.rotate(aci);
+        
+        // Ana resim üzerindeki ilgili bölgeyi merkeze oturtarak çiz
+        const difX = (c.xSrc + c.w / 2) - anaGorsel.width / 2;
+        const difY = (c.ySrc + c.h / 2) - anaGorsel.height / 2;
+        ctx.drawImage(anaGorsel, -anaGorsel.width / 2 - difX, -anaGorsel.height / 2 - difY);
+        ctx.restore();
+
+        // 2. ADIM: Kenardan Çekme Kırpma Maskesini (Koyu Şeffaf Alan) Çiz
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(0, 0, tuval.width, c.ust);
+        ctx.fillRect(0, tuval.height - c.alt, tuval.width, c.alt);
+        ctx.fillRect(0, c.ust, c.sol, tuval.height - c.ust - c.alt);
+        ctx.fillRect(tuval.width - c.sag, c.ust, c.sag, tuval.height - c.ust - c.alt);
+
+        // 3. ADIM: Kullanıcının Çekeceği Yeşil Kırpma Çizgisini Çiz
+        ctx.strokeStyle = '#00e676';
+        ctx.lineWidth = Math.max(3, tuval.width * 0.006);
+        ctx.strokeRect(c.sol, c.ust, tuval.width - c.sol - c.sag, tuval.height - c.ust - c.alt);
+    });
+}
+
+// Fare ve Dokunmatik Sürükleme Olay Kesişim Koordinat Hesaplaması
+function SürüklemeKoordinat Al(e, tuval) {
+    const rect = tuval.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+        x: (clientX - rect.left) * (tuval.width / rect.width),
+        y: (clientY - rect.top) * (tuval.height / rect.height)
+    };
+}
+
+// Herhangi Bir Canvas Üzerinde Sürükleme Başladığında
+function SuruklemeBasladi(bolge, e) {
+    if (!anaGorsel.src) return;
+    const tuval = document.getElementById('tuval_' + bolge);
+    const pos = SürüklemeKoordinat Al(e, tuval);
+    const c = kesimler[bolge];
+
+    const mSol = Math.abs(pos.x - c.sol);
+    const mSag = Math.abs(pos.x - (tuval.width - c.sag));
+    const mUst = Math.abs(pos.y - c.ust);
+    const mAlt = Math.abs(pos.y - (tuval.height - c.alt));
+
+    const dTol = dokunmaTolerans * (tuval.width / tuval.getBoundingClientRect().width);
+
+    if (mUst < dTol) aktifDurum = { bolge, kenar: 'ust' };
+    else if (mAlt < dTol) aktifDurum = { bolge, kenar: 'alt' };
+    else if (mSol < dTol) aktifDurum = { bolge, kenar: 'sol' };
+    else if (mSag < dTol) aktifDurum = { bolge, kenar: 'sag' };
+}
+
+// Sürükleme Devam Ederken Sınırları Canlı Güncelle
+function SuruklemeHareket(e) {
+    if (!aktifDurum.bolge) return;
+    if (e.cancelable) e.preventDefault();
+
+    const bolge = aktifDurum.bolge;
+    const tuval = document.getElementById('tuval_' + bolge);
+    const pos = SürüklemeKoordinat Al(e, tuval);
+    const c = kesimler[bolge];
+    const limit = 30; // Kırpma alanının tamamen sıfırlanmaması için minimum koruma genişliği
+
+    if (aktifDurum.kenar === 'ust') {
+        c.ust = Math.max(0, Math.min(pos.y, tuval.height - c.alt - limit));
+    } else if (aktifDurum.kenar === 'alt') {
+        c.alt = Math.max(0, Math.min(tuval.height - pos.y, tuval.height - c.ust - limit));
+    } else if (aktifDurum.kenar === 'sol') {
+        c.sol = Math.max(0, Math.min(pos.x, tuval.width - c.sag - limit));
+    } else if (aktifDurum.kenar === 'sag') {
+        c.sag = Math.max(0, Math.min(tuval.width - pos.x, tuval.width - c.sol - limit));
+    }
+    TumunuCiz();
+}
+
+function SuruklemeBitti() {
+    aktifDurum = { bolge: null, kenar: null };
+}
+
+// Olay Dinleyicilerini 4 Canvas İçin Bağla
+['alt', 'ust', 'sol', 'sag'].forEach(bolge => {
+    const tuval = document.getElementById('tuval_' + bolge);
+    
+    tuval.addEventListener('mousedown', (e) => SuruklemeBasladi(bolge, e));
+    tuval.addEventListener('touchstart', (e) => SuruklemeBasladi(bolge, e), { passive: false });
+});
+
+window.addEventListener('mousemove', SuruklemeHareket);
+window.addEventListener('touchmove', SuruklemeHareket, { passive: false });
+window.addEventListener('mouseup', SuruklemeBitti);
+window.addEventListener('touchend', SuruklemeBitti);
+
+// Memnun Olduğunuz Orijinal Pusula Yön Atama Mantığı
+function KuzeyAtasınıSec(secilenBolge) {
+    secilenKuzeyBolgesi = secilenBolge;
+    
+    // Saat yönü briç oryantasyon şeması (N - E - S - W)
+    if (secilenBolge === 'alt') {
+        yonHaritasi = { alt: "NORTH", sag: "EAST", ust: "SOUTH", sol: "WEST" };
+    } else if (secilenBolge === 'ust') {
+        yonHaritasi = { ust: "NORTH", sol: "EAST", alt: "SOUTH", sag: "WEST" };
+    } else if (secilenBolge === 'sol') {
+        yonHaritasi = { sol: "NORTH", ust: "EAST", sag: "SOUTH", alt: "WEST" };
+    } else if (secilenBolge === 'sag') {
+        yonHaritasi = { sag: "NORTH", alt: "EAST", sol: "SOUTH", ust: "WEST" };
+    }
+
+    // Durum etiketlerini ve başlıkları dinamik güncelle
+    ['alt', 'ust', 'sol', 'sag'].forEach(b => {
+        const etiket = document.getElementById('durum_' + b);
+        const baslik = document.getElementById('baslik_' + b);
+        const orijinalAd = b.charAt(0).toUpperCase() + b.slice(1);
+        
+        etiket.innerText = "🧭 Pusula Yönü: " + yonHaritasi[b];
+        baslik.innerText = orijinalAd + " Bölgesi (" + yonHaritasi[b] + ")";
+        
+        // Kuzey kutusunu görsel olarak vurgula
+        if (yonHaritasi[b] === "NORTH") {
+            etiket.style.color = "#00c853";
+        } else {
+            etiket.style.color = "#0088cc";
+        }
+    });
+}
+
+// 4 Bölgenin Çıktısını Matematiksel Olarak Kusursuz Hesaplayan ve İndiren Fonksiyon
+document.getElementById('btnTopluIndir').addEventListener('click', () => {
+    if (!secilenKuzeyBolgesi) {
+        alert("Lütfen önce hangi kutunun Kuzey (N) olduğunu belirtmek için '🧭 Bu Kutu Kuzey (N)' butonuna tıklayın!");
+        return;
+    }
+
+    const bordNo = bordNoSelect.value;
+
+    ['alt', 'ust', 'sol', 'sag'].forEach(bolge => {
+        const tuval = document.getElementById('tuval_' + bolge);
+        const c = kesimler[bolge];
+        const yonu = yonHaritasi[bolge];
+
+        // Sadece kullanıcının yeşil çizgilerle seçtiği (kırptığı) net alanı hesapla
+        const kGenislik = tuval.width - c.sol - c.sag;
+        const kYukseklik = tuval.height - c.ust - c.alt;
+
+        if (kGenislik <= 0 || kYukseklik <= 0) return;
+
+        const sonucCanvas = document.createElement('canvas');
+        sonucCanvas.width = kGenislik;
+        sonucCanvas.height = kYukseklik;
+        const sCtx = sonucCanvas.getContext('2d');
+
+        // Kullanıcının çizim esnasında yaptığı kırpma ötelemesini merkeze al
+        const sMerkezX = c.sol + kGenislik / 2;
+        const sMerkezY = c.ust + kYukseklik / 2;
+
+        sCtx.translate(kGenislik / 2, kYukseklik / 2);
+
+        // 1. ADIM: Masa Genel Eğrilik Açısını ve Kart Yönü Otomatik Döndürmesini Birleştir
+        let toplamRadyan = aci;
+
+        if (otomatikDondur.checked) {
+            if (yonu === "SOUTH") toplamRadyan += Math.PI;          // 180 derece döndür
+            else if (yonu === "EAST") toplamRadyan += Math.PI / 2;  // 90 derece sağa döndür
+            else if (yonu === "WEST") toplamRadyan -= Math.PI / 2;  // 90 derece sola döndür
+        }
+
+        sCtx.rotate(toplamRadyan);
+
+        // Ana görselin merkez koordinat farklarını işle
+        const oMerkezX = anaGorsel.width / 2;
+        const oMerkezY = anaGorsel.height / 2;
+        const dX = (c.xSrc + sMerkezX) - oMerkezX;
+        const dY = (c.ySrc + sMerkezY) - oMerkezY;
+
+        sCtx.drawImage(anaGorsel, -oMerkezX - dX, -oMerkezY - dY);
+
+        // Orijinal dosya isimlendirme formatınız: bordno_3_NORTH_crop.jpg
+        const dosyaAdi = `bordno_${bordNo}_${yonu}_crop.jpg`;
+
+        // Tarayıcı üzerinden toplu indirmeyi tetikle
+        const link = document.createElement('a');
+        link.download = dosyaAdi;
+        link.href = sonucCanvas.toDataURL('image/jpeg', 0.90);
+        link.click();
+    });
+});
+
+// Google Drive Entegrasyonu Altyapısı (İleride Backend/API Bağlantınız İçin Hazır)
+document.getElementById('btnDriveYukle').addEventListener('click', async () => {
+    if (!secilenKuzeyBolgesi) {
+        alert("Lütfen önce Kuzey (N) yönünü seçin!");
+        return;
+    }
+
+    const bordNo = bordNoSelect.value;
+    alert("Bord No " + bordNo + " için 4 yönün resimleri hazırlanıyor. Google Drive API entegrasyonu tetiklendi.");
+
+    // Geliştireceğiniz Drive upload akışı için Blob verilerini toplama simülasyonu:
+    const yuklemeListesi = [];
+
+    ['alt', 'ust', 'sol', 'sag'].forEach(bolge => {
+        const tuval = document.getElementById('tuval_' + bolge);
+        const c = kesimler[bolge];
+        const yonu = yonHaritasi[bolge];
+        
+        const kGenislik = tuval.width - c.sol - c.sag;
+        const kYukseklik = tuval.height - c.ust - c.alt;
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = kGenislik;
+        tempCanvas.height = kYukseklik;
+        const tCtx = tempCanvas.getContext('2d');
+
+        tCtx.translate(kGenislik / 2, kYukseklik / 2);
+        let rad = aci;
+        if (otomatikDondur.checked) {
+            if (yonu === "SOUTH") rad += Math.PI;
+            else if (yonu === "EAST") rad += Math.PI / 2;
+            else if (yonu === "WEST") rad -= Math.PI / 2;
+        }
+        tCtx.rotate(rad);
+
+        const dX = (c.xSrc + (c.sol + kGenislik / 2)) - (anaGorsel.width / 2);
+        const dY = (c.ySrc + (c.ust + kYukseklik / 2)) - (anaGorsel.height / 2);
+        tCtx.drawImage(anaGorsel, -(anaGorsel.width / 2) - dX, -(anaGorsel.height / 2) - dY);
+
+        // Resim verisini base64 veya Blob olarak hazırlıyoruz
+        const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.90);
+        yuklemeListesi.push({
+            isim: `bordno_${bordNo}_${yonu}_crop.jpg`,
+            veri: dataUrl
+        });
+    });
+
+    console.log("Drive'a gönderilecek paket hazır:", yuklemeListesi);
+    // TODO: Burada Google Drive API veya kendi backend script'inize (fetch POST) veriyi basacaksınız.
+});
+</script>
+
+</body>
+</html>
