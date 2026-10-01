@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Briç Masa Fotoğrafı Kırpma Aracı v1.7</title>
+    <title>Briç Masa Fotoğrafı Kırpma Aracı v1.8</title>
     <style>
         body { font-family: sans-serif; text-align: center; background: #eceff1; margin: 0; padding: 15px; }
         .Konteyner { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
@@ -44,7 +44,7 @@
 <body>
 
 <div class="Konteyner">
-    <h1>♠♥ Briç Masa Fotoğrafı Kırpma Aracı v1.7 ♦♣</h1>
+    <h1>♠♥ Briç Masa Fotoğrafı Kırpma Aracı v1.8 ♦♣</h1>
     <p style="color: #607d8b; font-size: 14px;">Kırpma esnasında tuval düz kalır; dokunmatik kilitlenmez. Hizalamalar nihai çıktıda otomatik döner.</p>
 
     <div class="YukleAlan" onclick="document.getElementById('dosyaInput').click()">
@@ -313,23 +313,31 @@ function SinirlariSifirla(sadeceOranDegisti = false) {
     if (!sadeceOranDegisti) kesimler.ust = { ust: 0, alt: 0, sol: 0, sag: 0 };
     Object.assign(kesimler.ust, { w: w, h: ustH, xSrc: 0, ySrc: 0 });
 
-    // --- SOL VE SAĞ BÖLGELER İÇİN GENİŞLİK İYİLEŞTİRMESİ ---
-    // Kartların dışarıda kalmaması için taban genişlik oranını %10 artırıyoruz
+    // --- SOL (WEST) VE SAĞ (EAST) BÖLGELER İÇİN DİKEY VE YATAY GENİŞLEME ---
+    // 1. Yatay genişliği artırarak kartların sağa/sola taşmasını önlüyoruz
     const solW = Math.round(w * ((oranlar.sol + 10) / 100)); 
     const sagW = Math.round(w * ((oranlar.sag + 10) / 100)); 
 
+    // 2. Alttan kartların eksik kalmasını önlemek için dikey yüksekliği (H) ciddi oranda artırıyoruz
+    // Orijinal kalan alana %25 ek dikey alan katıyoruz
     const dikeyKalan = h - (ustH + altH);
-    const solH = dikeyKalan + (ortusmePayi * 2);
-    const sagH = dikeyKalan + (ortusmePayi * 2);
+    const ekstraDikeyAlan = Math.round(h * 0.25); 
+    const solH = dikeyKalan + ekstraDikeyAlan;
+    const sagH = dikeyKalan + ekstraDikeyAlan;
 
-    // SOL BÖLGE
+    // 3. Başlama noktasını (ySrc) daha yukarı çekerek pencerenin alt sınırını aşağıya kaydırıyoruz
+    // Üst bölgenin bittiği yerin biraz daha yukarısından başlatıyoruz
+    const baslangicY = Math.max(0, ustH - Math.round(ekstraDikeyAlan / 2));
+
+    // SOL BÖLGE (WEST)
     if (!sadeceOranDegisti) kesimler.sol = { ust: 0, alt: 0, sol: 0, sag: 0 };
-    Object.assign(kesimler.sol, { w: solW, h: solH, xSrc: 0, ySrc: ustH - ortusmePayi });
+    Object.assign(kesimler.sol, { w: solW, h: solH, xSrc: 0, ySrc: baslangicY });
 
-    // SAĞ BÖLGE
+    // SAĞ BÖLGE (EAST)
     if (!sadeceOranDegisti) kesimler.sag = { ust: 0, alt: 0, sol: 0, sag: 0 };
-    Object.assign(kesimler.sag, { w: sagW, h: sagH, xSrc: w - sagW, ySrc: ustH - ortusmePayi });
+    Object.assign(kesimler.sag, { w: sagW, h: sagH, xSrc: w - sagW, ySrc: baslangicY });
 }
+
 
 
 function OranDegistir(bolge, yon) {
