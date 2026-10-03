@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSS Başlık Okuyucu</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 650px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f7f9fc;
+            color: #333;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+        }
+        h2 { text-align: center; color: #2c3e50; margin-top: 0; }
+        .info {
+            background: #eef2f7;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; }
+        button {
+            flex: 1;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        .btn-fetch { background-color: #3498db; color: white; }
+        .btn-play { background-color: #2ecc71; color: white; }
+        .btn-pause { background-color: #f39c12; color: white; }
+        .btn-stop { background-color: #e74c3c; color: white; }
+        
+        #status { font-weight: bold; color: #16a085; margin-bottom: 10px; }
+        #titlesList {
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 6px;
+            list-style-type: decimal;
+            padding-left: 30px;
+        }
+        #titlesList li { margin-bottom: 6px; font-size: 14px; }
+        #titlesList li.active { color: #e67e22; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>RSS Başlık Okuyucu</h2>
+    
+    <div class="info">
+        <strong>Son Okuma Tarihi:</strong> <span id="lastReadDate">Henüz okunmadı</span>
+    </div>
+
+    <div class="controls">
+        <button class="btn-fetch" onclick="fetchAndPrepare()">Haberleri Çek</button>
+        <button class="btn-play" onclick="startSpeech()">Oku / Devam Et</button>
+        <button class="btn-pause" onclick="pauseSpeech()">Duraklat</button>
+        <button class="btn-stop" onclick="stopSpeech()">Durdur</button>
+    </div>
+
+    <div id="status">İşlem bekleniyor...</div>
+    <ol id="titlesList"></ol>
+</div>
+
+<script>
+    const rssUrl = "https://script.google.com/macros/s/AKfycbyILCj6d4LF4ErSDNuNl2Xhgi9NDd_Do2rhJlb1sIgsuJ44wcIVA4l5F8SdE3eUUD4g/exec";
+    const synth = window.speechSynthesis;
+    let headersToRead = [];
+    let currentIndex = 0;
+
+    // Sayfa yüklendiğinde son okuma tarihini yerel hafızadan çek
+    window.onload = function() {
+        const savedDate = localStorage.getItem("rss_last_read_date");
+        if (savedDate) {
+            document.getElementById("lastReadDate").innerText = savedDate;
+        }
+    };
+
+    // RSS sayfasından HTML içeriğini çekip başlıkları süzme
+    async function fetchAndPrepare() {
+        document.getElementById("status").innerText = "Başlıklar çekiliyor...";
+        try {
+            const response = await fetch(rssUrl);
+            const htmlText = await response.text();
+            
+            // HTML metnini DOM elemanına çeviriyoruz
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlText, 'text/html');
+            
+            // Accordion içindeki ana başlıkları bulur 
+            // (Aşağıdaki seçici common accordion class'ları için uyarlanmıştır)
+            let elements = doc.querySelectorAll('.accordion-header, .accordion-title, button.accordion, h2, h3');
+            
+            headersToRead = [];
+            elements.forEach(el => {
+                const text = el.innerText.trim();
+                // Boş veya tekrarlayan başlıkları ele
+                if (text && !headersToRead.includes(text)) {
+                    headersToRead.push(text);
+                }
+            });
+
+            if (headersToRead.length === 0) {
+                document.getElementById("status").innerText = "Başlık bulunamadı.";
+                return;
+            }
+
+            // Liste arayüzünü güncelle
+            const listEl = document.getElementById("titlesList");
+            listEl.innerHTML = "";
+            headersToRead.forEach((title, index) => {
+                const li = document.createElement("li");
+                li.id = "title-" + index;
+                li.innerText = title;
+                listEl.appendChild(li);
+            });
+
+            document.getElementById("status").innerText = `${headersToRead.length} başlık çekildi. Okunmaya hazır.`;
+            currentIndex = 0;
+
+        } catch (error) {
+            console.error(error);
+            document.getElementById("status").innerText = "Çekme hatası (CORS veya bağlantı sorunu).";
+        }
+    }
+
+    // Sırayla okuma fonksiyonu
+    function startSpeech() {
+        if (synth.paused && synth.speaking) {
+            synth.resume();
+            return;
+        }
+
+        if (headersToRead.length === 0) {
+            alert("Önce 'Haberleri Çek' butonuna basarak başlıkları yükleyin.");
+            return;
+        }
+
+        if (currentIndex >= headersToRead.length) {
+            currentIndex = 0; // Bittiğinde başa dön
+        }
+
+        readNextTitle();
+    }
+
+    function readNextTitle() {
+        if (currentIndex >= headersToRead.length) {
+            document.getElementById("status").innerText = "Tüm başlıklar okundu.";
+            saveLastReadTime();
+            return;
+        }
+
+        // Aktif başlığı listede vurgula
+        document.querySelectorAll("#titlesList li").forEach(li => li.classList.remove("active"));
+        const activeLi = document.getElementById("title-" + currentIndex);
+        if (activeLi) activeLi.classList.add("active");
+
+        const currentText = headersToRead[currentIndex];
+        document.getElementById("status").innerText = `Okunuyor (${currentIndex + 1}/${headersToRead.length}): ${currentText}`;
+
+        const utterance = new SpeechSynthesisUtterance(currentText);
+        utterance.lang = "tr-TR";
+        utterance.rate = 1.0;
+
+        // Başlık okunduğunda bir sonrakine geç ve tarihi güncelle
+        utterance.onend = function() {
+            saveLastReadTime();
+            currentIndex++;
+            readNextTitle();
+        };
+
+        synth.speak(utterance);
+    }
+
+    // Son okuma zamanını kaydetme
+    function saveLastReadTime() {
+        const now = new Date();
+        const formattedDate = now.toLocaleString("tr-TR");
+        localStorage.setItem("rss_last_read_date", formattedDate);
+        document.getElementById("lastReadDate").innerText = formattedDate;
+    }
+
+    function pauseSpeech() {
+        if (synth.speaking) synth.pause();
+    }
+
+    function stopSpeech() {
+        if (synth.speaking || synth.paused) {
+            synth.cancel();
+            document.getElementById("status").innerText = "Durduruldu.";
+        }
+    }
+</script>
+
+</body>
+</html>
