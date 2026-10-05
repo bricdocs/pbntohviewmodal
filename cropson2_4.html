@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Briç Masa Fotoğrafı Kırpma Aracı v2.4</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #eceff1; margin: 0; padding: 15px; }
+        .Konteyner { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #37474f; font-size: 22px; margin-top: 0; }
+        .YukleAlan { border: 2px dashed #0088cc; padding: 20px; border-radius: 8px; background: #f9fbfd; cursor: pointer; margin-bottom: 15px; }
+        #dosyaInput { display: none; }
+        #kameraInput { display: none; }
+        .Btn { background: #0088cc; color: #fff; border: none; padding: 10px 18px; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer; margin: 5px; transition: background 0.2s; }
+        .Btn:hover { background: #006699; }
+        .BtnYesil { background: #43a047; }
+        .BtnYesil:hover { background: #2e7d32; }
+        .BtnTuruncu { background: #f4511e; }
+        .BtnTuruncu:hover { background: #d84315; }
+        .BtnMor { background: #673ab7; }
+        .BtnMor:hover { background: #5e35b1; }
+        .KontrolPaneli { background: #f1f5f7; padding: 15px; border-radius: 8px; margin-bottom: 15px; width: 100%; box-sizing: border-box; }
+        .KontrolPaneli label { display: block; font-weight: bold; margin-bottom: 8px; color: #37474f; }
+        .KontrolPaneli input[type="range"] { width: 80%; max-width: 400px; cursor: pointer; }
+        
+        /* 4 Canvas alt alta tek sıra büyük ekran dikey düzeni */
+        .GridSistem { display: flex; flex-direction: column; gap: 25px; margin-top: 20px; }
+        
+        .KartKutusu { background: #fff; border: 1px solid #cfd8dc; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); position: relative; width: 100%; box-sizing: border-box; }
+        .KartKutusu h3 { margin: 0 0 10px 0; color: #546e7a; font-size: 18px; }
+        .EditorKonteyner { position: relative; display: inline-block; width: 100%; background: #37474f; border-radius: 4px; touch-action: none; overflow: hidden; }
+        canvas { width: 100%; display: block; background: #263238; cursor: move; }
+        .CanliAyar { margin-top: 10px; display: flex; justify-content: center; align-items: center; gap: 10px; }
+        .AyarBtn { background: #cfd8dc; border: none; width: 35px; height: 35px; font-weight: bold; font-size: 18px; border-radius: 4px; cursor: pointer; }
+        .AyarBtn:hover { background: #b0bec5; }
+        .DurumEtiketi { display: block; margin-top: 5px; font-size: 13px; font-weight: bold; color: #78909c; }
+        .OnizlemeAlani { margin-top: 25px; border-top: 2px dashed #b0bec5; padding-top: 20px; display: none; }
+        
+        /* Çıktı kartları dikey sırada alt alta dizilecek şekilde optimize edildi */
+        .OnizlemeIzgara { display: flex; flex-direction: column; gap: 20px; max-width: 500px; margin: 15px auto 0 auto; }
+        .OnizlemeKart { background: #f9fbfd; border: 1px solid #b0bec5; padding: 12px; border-radius: 8px; }
+        .OnizlemeKart img { max-width: 100%; border: 1px solid #ccc; background: #fff; display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+
+<div class="Konteyner">
+    <h1>♠♥ Briç Masa Fotoğrafı Kırpma Aracı v2.4 ♦♣</h1>
+    <p style="color: #607d8b; font-size: 14px;">v2.4: N-S-E-W Dikey Düzeni, 40 Bord Sınırı ve Doğrudan Klasöre Fırlatan Google Drive API.</p>
+
+    <div style="margin-bottom: 15px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+        <button class="Btn" onclick="document.getElementById('dosyaInput').click()">📁 Hafızadan Fotoğraf Seç</button>
+        <button class="Btn BtnTuruncu" onclick="document.getElementById('kameraInput').click()">📷 Fotoğraf Çek (Yerel Kamera)</button>
+    </div>
+
+    <input type="file" id="dosyaInput" accept="image/*">
+    <input type="file" id="kameraInput" accept="image/*" capture="environment">
+
+    <div class="KontrolPaneli" id="kontrolKutu" style="display:none;">
+        <label for="aciSlider">🔄 Masa Genel Eğrilik Açısı: <span id="aciDeger">0</span>°</label>
+        <input type="range" id="aciSlider" min="-15" max="15" step="0.5" value="0">
+        <div style="margin-top: 10px;">
+            <label style="display:inline; font-weight:normal; cursor:pointer;">
+                <input type="checkbox" id="otomatikDondur" checked> Kart Yönlerini Otomatik Hizala (Nihai çıktıda elleri kuzeye çevir)
+            </label>
+        </div>
+        <div style="margin-top: 10px;">
+            <label style="display:inline-block; margin-right:10px;">📋 Bord No Seçin:</label>
+            <select id="bordNoSelect" style="padding: 5px; font-weight: bold; border-radius: 4px;">
+                <!-- JavaScript dolduracak -->
+            </select>
+        </div>
+    </div>
+    <!-- Kutuların yerleşim ID'leri NORTH, SOUTH, EAST, WEST sırasına göre dikey dizildi -->
+    <div class="GridSistem" id="editorIzgara" style="display:none;">
+        
+        <!-- ÜST BÖLGE -->
+        <div class="KartKutusu" id="kutu_ust">
+            <h3 id="baslik_ust">Üst Bölgesi</h3>
+            <div class="EditorKonteyner">
+                <canvas id="tuval_ust"></canvas>
+            </div>
+            <div class="CanliAyar">
+                <button class="AyarBtn" onclick="OranDegistir('ust', -1)">-</button>
+                <span id="deger_ust">38%</span>
+                <button class="AyarBtn" onclick="OranDegistir('ust', 1)">+</button>
+            </div>
+            <button class="Btn BtnTuruncu" style="font-size:12px; padding:6px 10px;" onclick="KuzeyAtasınıSec('ust')">🧭 Bu Kutu Kuzey (N)</button>
+            <span class="DurumEtiketi" id="durum_ust">Yön Atanmadı</span>
+        </div>
+
+        <!-- ALT BÖLGE -->
+        <div class="KartKutusu" id="kutu_alt">
+            <h3 id="baslik_alt">Alt Bölgesi</h3>
+            <div class="EditorKonteyner">
+                <canvas id="tuval_alt"></canvas>
+            </div>
+            <div class="CanliAyar">
+                <button class="AyarBtn" onclick="OranDegistir('alt', -1)">-</button>
+                <span id="deger_alt">38%</span>
+                <button class="AyarBtn" onclick="OranDegistir('alt', 1)">+</button>
+            </div>
+            <button class="Btn BtnTuruncu" style="font-size:12px; padding:6px 10px;" onclick="KuzeyAtasınıSec('alt')">🧭 Bu Kutu Kuzey (N)</button>
+            <span class="DurumEtiketi" id="durum_alt">Yön Atanmadı</span>
+        </div>
+
+        <!-- SOL BÖLGE -->
+        <div class="KartKutusu" id="kutu_sol">
+            <h3 id="baslik_sol">Sol Bölgesi</h3>
+            <div class="EditorKonteyner">
+                <canvas id="tuval_sol"></canvas>
+            </div>
+            <div class="CanliAyar">
+                <button class="AyarBtn" onclick="OranDegistir('sol', -1)">-</button>
+                <span id="deger_sol">42%</span>
+                <button class="AyarBtn" onclick="OranDegistir('sol', 1)">+</button>
+            </div>
+            <button class="Btn BtnTuruncu" style="font-size:12px; padding:6px 10px;" onclick="KuzeyAtasınıSec('sol')">🧭 Bu Kutu Kuzey (N)</button>
+            <span class="DurumEtiketi" id="durum_sol">Yön Atanmadı</span>
+        </div>
+
+        <!-- SAĞ BÖLGE -->
+        <div class="KartKutusu" id="kutu_sag">
+            <h3 id="baslik_sag">Sağ Bölgesi</h3>
+            <div class="EditorKonteyner">
+                <canvas id="tuval_sag"></canvas>
+            </div>
+            <div class="CanliAyar">
+                <button class="AyarBtn" onclick="OranDegistir('sag', -1)">-</button>
+                <span id="deger_sag">42%</span>
+                <button class="AyarBtn" onclick="OranDegistir('sag', 1)">+</button>
+            </div>
+            <button class="Btn BtnTuruncu" style="font-size:12px; padding:6px 10px;" onclick="KuzeyAtasınıSec('sag')">🧭 Bu Kutu Kuzey (N)</button>
+            <span class="DurumEtiketi" id="durum_sag">Yön Atanmadı</span>
+        </div>
+
+    </div>
+
+    <!-- Aksiyon Butonları -->
+    <div style="margin-top: 25px; display: none;" id="aksiyonAlani">
+        <button class="Btn BtnMor" style="font-size:16px; padding:12px 25px; width: 100%; max-width: 400px; margin-bottom: 15px;" id="btnNihaiHesapla">⚙️ KARTLARI DÖNDÜR VE SON HALİ GÖR</button>
+        <br>
+        <button class="Btn BtnYesil" style="font-size:15px; padding:10px 20px; display: none;" id="btnTopluIndir">⬇ 4 Bölgeyi de İndir (Tüm Yönler)</button>
+        <button class="Btn" style="font-size:15px; padding:10px 20px; background: #673ab7; display: none;" id="btnDriveYukle">☁ Google Drive'a Yükle</button>
+    </div>
+
+    <!-- Nihai Dönmüş Önizleme Görselleri Alanı -->
+    <div class="OnizlemeAlani" id="onizlemeKutu">
+        <h3 style="color: #37474f; margin: 0;">📋 Gönderilmeye Hazır Kart Çıktıları</h3>
+        <p style="font-size: 12px; color: #78909c; margin: 5px 0 15px 0;">Kartlar otomatik olarak Kuzey perspektifine eşitlendi.</p>
+        <div class="OnizlemeIzgara" id="onizlemeKonteyner">
+            <!-- JavaScript dinamik img basacak -->
+        </div>
+    </div>
+
+</div>
+
+<script>
+// Google Drive Owner Kimlik Doğrulama Token Bilgisi
+// NOT: Gerçek yükleme için kendi Access Token bilginizi buraya tırnak içine yapıştırın.
+const GOOGLE_DRIVE_ACCESS_TOKEN = "BURAYA_ACCESS_TOKEN_YAPISTIRIN";
+
+const dosyaInput = document.getElementById('dosyaInput');
+const kameraInput = document.getElementById('kameraInput');
+const aciSlider = document.getElementById('aciSlider');
+const aciDeger = document.getElementById('aciDeger');
+const kontrolKutu = document.getElementById('kontrolKutu');
+const editorIzgara = document.getElementById('editorIzgara');
+const aksiyonAlani = document.getElementById('aksiyonAlani');
+const otomatikDondur = document.getElementById('otomatikDondur');
+const bordNoSelect = document.getElementById('bordNoSelect');
+
+const btnNihaiHesapla = document.getElementById('btnNihaiHesapla');
+const btnTopluIndir = document.getElementById('btnTopluIndir');
+const btnDriveYukle = document.getElementById('btnDriveYukle');
+const onizlemeKutu = document.getElementById('onizlemeKutu');
+const onizlemeKonteyner = document.getElementById('onizlemeKonteyner');
+
+let anaGorsel = new Image();
+let aci = 0;
+
+let oranlar = { alt: 38, ust: 38, sol: 42, sag: 42 };
+let ortusmePayi = 10; 
+
+let kesimler = {
+    alt: { ust: 0, alt: 0, sol: 0, sag: 0 },
+    ust: { ust: 0, alt: 0, sol: 0, sag: 0 },
+    sol: { ust: 0, alt: 0, sol: 0, sag: 0 },
+    sag: { ust: 0, alt: 0, sol: 0, sag: 0 }
+};
+
+let aktifDurum = { bolge: null, kenar: null }; 
+const dokunmaTolerans = 35; 
+
+let secilenKuzeyBolgesi = null;
+let yonHaritasi = { alt: "", ust: "", sol: "", sag: "" };
+let uretilenGorseller = [];
+
+// İlk seçenek boş ("Seçiniz...") ve döngü sınırı 40 yapıldı
+function BordNoSecenekleriniDoldur() {
+    bordNoSelect.innerHTML = "";
+    
+    let optBos = document.createElement('option');
+    optBos.value = "";
+    optBos.innerText = "📋 Bord No: Seçiniz...";
+    bordNoSelect.appendChild(optBos);
+
+    for (let i = 1; i <= 40; i++) {
+        let opt = document.createElement('option');
+        opt.value = i;
+        opt.innerText = "Bord No: " + i;
+        bordNoSelect.appendChild(opt);
+    }
+}
+BordNoSecenekleriniDoldur();
+function DosyaOku(dosya) {
+    if (!dosya) return;
+    const okuyucu = new FileReader();
+    okuyucu.onload = (evt) => { anaGorsel.src = evt.target.result; };
+    okuyucu.readAsDataURL(dosya);
+}
+
+dosyaInput.addEventListener('change', (e) => { if(e.target.files.length > 0) DosyaOku(e.target.files[0]); });
+kameraInput.addEventListener('change', (e) => { if(e.target.files.length > 0) DosyaOku(e.target.files[0]); });
+
+// Yeni fotoğraf yüklendiğinde Bord No otomatik boş ("Seçiniz...") konumuna alınır
+anaGorsel.onload = () => {
+    aciSlider.value = 0;
+    aciDeger.innerText = 0;
+    aci = 0;
+    secilenKuzeyBolgesi = null;
+    
+    bordNoSelect.value = ""; // Akıllı Kilit: Seçimi temizle
+    onizlemeKutu.style.display = 'none';
+    btnTopluIndir.style.display = 'none';
+    btnDriveYukle.style.display = 'none';
+
+    SinirlariSifirla(false);
+
+    ['alt', 'ust', 'sol', 'sag'].forEach(b => {
+        document.getElementById('durum_' + b).innerText = "Yön Atanmadı";
+        document.getElementById('durum_' + b).style.color = "#78909c";
+        document.getElementById('baslik_' + b).innerText = b.charAt(0).toUpperCase() + b.slice(1) + " Bölgesi";
+    });
+
+    kontrolKutu.style.display = 'block';
+    editorIzgara.style.display = 'flex'; 
+    aksiyonAlani.style.display = 'block';
+
+    TumunuCiz();
+};
+
+function SinirlariSifirla(sadeceOranDegisti = false) {
+    const w = anaGorsel.width;
+    const h = anaGorsel.height;
+
+    const altH = Math.round(h * (oranlar.alt / 100));
+    if (!sadeceOranDegisti) kesimler.alt = { ust: 0, alt: 0, sol: 0, sag: 0 };
+    Object.assign(kesimler.alt, { w: w, h: altH, xSrc: 0, ySrc: h - altH });
+
+    const ustH = Math.round(h * (oranlar.ust / 100));
+    if (!sadeceOranDegisti) kesimler.ust = { ust: 0, alt: 0, sol: 0, sag: 0 };
+    Object.assign(kesimler.ust, { w: w, h: ustH, xSrc: 0, ySrc: 0 });
+
+    const solW = Math.round(w * ((oranlar.sol + 10) / 100)); 
+    const sagW = Math.round(w * ((oranlar.sag + 10) / 100)); 
+
+    const dikeyKalan = h - (ustH + altH);
+    const ekstraDikeyAlan = Math.round(h * 0.25); 
+    const solH = dikeyKalan + ekstraDikeyAlan;
+    const sagH = dikeyKalan + ekstraDikeyAlan;
+
+    const baslangicY = Math.max(0, ustH - Math.round(ekstraDikeyAlan / 2));
+
+    if (!sadeceOranDegisti) kesimler.sol = { ust: 0, alt: 0, sol: 0, sag: 0 };
+    Object.assign(kesimler.sol, { w: solW, h: solH, xSrc: 0, ySrc: baslangicY });
+
+    if (!sadeceOranDegisti) kesimler.sag = { ust: 0, alt: 0, sol: 0, sag: 0 };
+    Object.assign(kesimler.sag, { w: sagW, h: sagH, xSrc: w - sagW, ySrc: baslangicY });
+}
+
+function OranDegistir(bolge, yon) {
+    oranlar[bolge] = Math.max(10, Math.min(80, oranlar[bolge] + yon));
+    document.getElementById('deger_' + bolge).innerText = oranlar[bolge] + "%";
+    SinirlariSifirla(true); 
+    TumunuCiz();
+}
+
+aciSlider.addEventListener('input', (e) => {
+    const derece = parseFloat(e.target.value);
+    aciDeger.innerText = derece;
+    aci = (derece * Math.PI) / 180;
+    TumunuCiz();
+});
+
+function TumunuCiz() {
+    if (!anaGorsel.src) return;
+    ['alt', 'ust', 'sol', 'sag'].forEach(bolge => {
+        const tuval = document.getElementById('tuval_' + bolge);
+        const ctx = tuval.getContext('2d');
+        const c = kesimler[bolge];
+
+        tuval.width = c.w;
+        tuval.height = c.h;
+        ctx.clearRect(0, 0, tuval.width, tuval.height);
+
+        ctx.save();
+        ctx.translate(tuval.width / 2, tuval.height / 2);
+        ctx.rotate(aci); 
+        
+        const orijinalBölgeMerkezX = c.xSrc + c.w / 2;
+        const orijinalBölgeMerkezY = c.ySrc + c.h / 2;
+        const dx = orijinalBölgeMerkezX - anaGorsel.width / 2;
+        const dy = orijinalBölgeMerkezY - anaGorsel.height / 2;
+        
+        ctx.drawImage(anaGorsel, -anaGorsel.width / 2 - dx, -anaGorsel.height / 2 - dy);
+        ctx.restore();
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(0, 0, tuval.width, c.ust);
+        ctx.fillRect(0, tuval.height - c.alt, tuval.width, c.alt);
+        ctx.fillRect(0, c.ust, c.sol, tuval.height - c.ust - c.alt);
+        ctx.fillRect(tuval.width - c.sag, c.ust, c.sag, tuval.height - c.ust - c.alt);
+
+        ctx.strokeStyle = '#00e676';
+        ctx.lineWidth = Math.max(3, tuval.width * 0.006);
+        ctx.strokeRect(c.sol, c.ust, tuval.width - c.sol - c.sag, tuval.height - c.ust - c.alt);
+    });
+}
+function SuruklemeKoordinatAl(e, tuval) {
+    const rect = tuval.getBoundingClientRect();
+    const clientX = e.touches ? e.touches.clientX : e.clientX;
+    const clientY = e.touches ? e.touches.clientY : e.clientY;
+    return {
+        x: (clientX - rect.left) * (tuval.width / rect.width),
+        y: (clientY - rect.top) * (tuval.height / rect.height)
+    };
+}
+
+function SuruklemeBasladi(bolge, e) {
+    if (!anaGorsel.src) return;
+    const tuval = document.getElementById('tuval_' + bolge);
+    const pos = SuruklemeKoordinatAl(e, tuval);
+    const c = kesimler[bolge];
+
+    const mSol = Math.abs(pos.x - c.sol);
+    const mSag = Math.abs(pos.x - (tuval.width - c.sag));
+    const mUst = Math.abs(pos.y - c.ust);
+    const mAlt = Math.abs(pos.y - (tuval.height - c.alt));
+
+    const dTol = dokunmaTolerans * (tuval.width / tuval.getBoundingClientRect().width);
+
+    if (mUst < dTol) aktifDurum = { bolge, kenar: 'ust' };
+    else if (mAlt < dTol) aktifDurum = { bolge, kenar: 'alt' };
+    else if (mSol < dTol) aktifDurum = { bolge, kenar: 'sol' };
+    else if (mSag < dTol) aktifDurum = { bolge, kenar: 'sag' };
+}
+
+function SuruklemeHareket(e) {
+    if (!aktifDurum.bolge) return;
+    if (e.cancelable) e.preventDefault();
+
+    const bolge = aktifDurum.bolge;
+    const tuval = document.getElementById('tuval_' + bolge);
+    const pos = SuruklemeKoordinatAl(e, tuval);
+    const c = kesimler[bolge];
+    const limit = 30;
+
+    if (aktifDurum.kenar === 'ust') {
+        c.ust = Math.max(0, Math.min(pos.y, tuval.height - c.alt - limit));
+    } else if (aktifDurum.kenar === 'alt') {
+        c.alt = Math.max(0, Math.min(tuval.height - pos.y, tuval.height - c.ust - limit));
+    } else if (aktifDurum.kenar === 'sol') {
+        c.sol = Math.max(0, Math.min(pos.x, tuval.width - c.sag - limit));
+    } else if (aktifDurum.kenar === 'sag') {
+        c.sag = Math.max(0, Math.min(tuval.width - pos.x, tuval.width - c.sol - limit));
+    }
+    TumunuCiz();
+}
+
+function SuruklemeBitti() { aktifDurum = { bolge: null, kenar: null }; }
+
+['alt', 'ust', 'sol', 'sag'].forEach(bolge => {
+    const tuval = document.getElementById('tuval_' + bolge);
+    tuval.addEventListener('mousedown', (e) => SuruklemeBasladi(bolge, e));
+    tuval.addEventListener('touchstart', (e) => SuruklemeBasladi(bolge, e), { passive: false });
+});
+
+window.addEventListener('mousemove', SuruklemeHareket);
+window.addEventListener('touchmove', SuruklemeHareket, { passive: false });
+window.addEventListener('mouseup', SuruklemeBitti);
+window.addEventListener('touchend', SuruklemeBitti);
+
+// Kuzey Noktasına Göre (North Referanslı) Hatasız Pusula Motoru
+function KuzeyAtasınıSec(secilenBolge) {
+    secilenKuzeyBolgesi = secilenBolge;
+    
+    if (secilenBolge === 'alt') {
+        yonHaritasi = { alt: "NORTH", sag: "WEST", ust: "SOUTH", sol: "EAST" };
+    } else if (secilenBolge === 'ust') {
+        yonHaritasi = { ust: "NORTH", sag: "EAST", alt: "SOUTH", sol: "WEST" };
+    } else if (secilenBolge === 'sol') {
+        yonHaritasi = { sol: "NORTH", ust: "EAST", sag: "SOUTH", alt: "WEST" };
+    } else if (secilenBolge === 'sag') {
+        yonHaritasi = { sag: "NORTH", alt: "EAST", sol: "SOUTH", ust: "WEST" };
+    }
+
+    ['alt', 'ust', 'sol', 'sag'].forEach(b => {
+        const etiket = document.getElementById('durum_' + b);
+        const baslik = document.getElementById('baslik_' + b);
+        const orijinalAd = b.charAt(0).toUpperCase() + b.slice(1);
+        const guncelYon = yonHaritasi[b];
+        
+        etiket.innerText = "🧭 Pusula Yönü: " + guncelYon;
+        baslik.innerText = `${orijinalAd} Bölgesi (${guncelYon})`;
+        
+        if (guncelYon === "NORTH") {
+            etiket.style.color = "#00c853";
+        } else {
+            etiket.style.color = "#0088cc";
+        }
+    });
+}
+// B PLANI MOTORU: Nihai Önizlemeleri Üreten Alan
+btnNihaiHesapla.addEventListener('click', () => {
+    const bordNo = bordNoSelect.value;
+    if (!bordNo) {
+        alert("🚨 Hatalı işlemi önleme kilidi aktif! Lütfen önce arayüzden geçerli bir Bord No seçin.");
+        return;
+    }
+
+    if (!secilenKuzeyBolgesi) {
+        alert("Lütfen önce hangi kutunun Kuzey (N) olduğunu belirtmek için '🧭 Bu Kutu Kuzey (N)' butonuna tıklayın!");
+        return;
+    }
+
+    onizlemeKonteyner.innerHTML = "";
+    uretilenGorseller = [];
+
+    // Çıktı kartları tam istediğiniz okuma düzeninde (NORTH, SOUTH, EAST, WEST) alt alta basılır
+    const ciktiSiralamasi = ['ust', 'alt', 'sol', 'sag'];
+
+    ciktiSiralamasi.forEach(bolge => {
+        const tuval = document.getElementById('tuval_' + bolge);
+        const c = kesimler[bolge];
+        const yonu = yonHaritasi[bolge];
+
+        const kGenislik = tuval.width - c.sol - c.sag;
+        const kYukseklik = tuval.height - c.ust - c.alt;
+
+        if (kGenislik <= 0 || kYukseklik <= 0) return;
+
+        const tCanvas = document.createElement('canvas');
+        const tCtx = tCanvas.getContext('2d');
+        let toplamRadyan = aci; 
+        let donduruldu = false;
+
+        if (otomatikDondur.checked) {
+            donduruldu = true;
+            if (yonu === "SOUTH") toplamRadyan += Math.PI; 
+            else if (yonu === "EAST") toplamRadyan += Math.PI / 2; 
+            else if (yonu === "WEST") toplamRadyan -= Math.PI / 2; 
+        }
+
+        if (donduruldu && (yonu === "EAST" || yonu === "WEST")) {
+            tCanvas.width = kYukseklik; tCanvas.height = kGenislik;
+        } else {
+            tCanvas.width = kGenislik; tCanvas.height = kYukseklik;
+        }
+
+        tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
+        tCtx.save();
+        tCtx.translate(tCanvas.width / 2, tCanvas.height / 2);
+        tCtx.rotate(toplamRadyan);
+
+        const sMerkezX = c.sol + kGenislik / 2;
+        const sMerkezY = c.ust + kYukseklik / 2;
+        const oMerkezX = anaGorsel.width / 2;
+        const oMerkezY = anaGorsel.height / 2;
+        
+        const dX = (c.xSrc + sMerkezX) - oMerkezX;
+        const dY = (c.ySrc + sMerkezY) - oMerkezY;
+
+        tCtx.drawImage(anaGorsel, -oMerkezX - dX, -oMerkezY - dY);
+        tCtx.restore();
+
+        const dataUrl = tCanvas.toDataURL('image/jpeg', 0.95); 
+        const dosyaAdi = `bordno_${bordNo}_${yonu}_crop.jpg`;
+
+        uretilenGorseller.push({ isim: dosyaAdi, veri: dataUrl });
+
+        const kartHtml = `
+            <div class="OnizlemeKart">
+                <strong style="font-size:14px; color:#37474f; display:block; margin-bottom:5px;">🧭 Yön: ${yonu}</strong>
+                <img src="${dataUrl}">
+                <span style="font-size:11px; color:#78909c; display:block; margin-top:5px; word-break:break-all;">${dosyaAdi}</span>
+            </div>
+        `;
+        onizlemeKonteyner.insertAdjacentHTML('beforeend', kartHtml);
+    });
+
+    onizlemeKutu.style.display = 'block';
+    btnTopluIndir.style.display = 'inline-block';
+    btnDriveYukle.style.display = 'inline-block';
+    onizlemeKutu.scrollIntoView({ behavior: 'smooth' });
+});
+
+// Sıfırlama işlemi indirme fonksiyonunun EN SONUNDA çalışır
+btnTopluIndir.addEventListener('click', () => {
+    if (uretilenGorseller.length === 0) return;
+    
+    uretilenGorseller.forEach(gorsel => {
+        const link = document.createElement('a');
+        link.download = gorsel.isim; link.href = gorsel.veri; link.click();
+    });
+
+    setTimeout(() => {
+        bordNoSelect.value = "";
+        alert("✅ 4 Yönün normal resimleri başarıyla indirildi. Yeni masada dalgınlık olmaması için Bord No sıfırlandı!");
+    }, 500);
+});
+
+// CANLI UPLOAD MOTORU: Klasör açma işine karışmadan doğrudan mevcut hedef klasöre normal resim fırlatır
+btnDriveYukle.addEventListener('click', async () => {
+    if (uretilenGorseller.length === 0) return;
+    const bordNo = bordNoSelect.value;
+
+    // 1. Bugünün Tarihini Formatla (YYYY-MM-DD)
+    const bugun = new Date();
+    const yil = bugun.getFullYear();
+    const ay = String(bugun.getMonth() + 1).padStart(2, '0');
+    const gun = String(bugun.getDate()).padStart(2, '0');
+    const varsayilanTarihMetni = `${yil}-${ay}-${gun}`;
+    
+    let hedefKlasorAdi = `PBN/${varsayilanTarihMetni}`;
+
+    // 2. Kullanıcı Onay Şablonu (Yes / No / Cancel)
+    const onay = confirm(`Görseller Drive'da önceden açmış olduğunuz "${hedefKlasorAdi}" klasörünün içerisine yüklenecektir. Onaylıyor musunuz?\n\n(Farklı bir klasör adı belirtmek için "İptal/Hayır" butonuna basın)`);
+    
+    if (!onay) {
+        const yeniAd = prompt("Lütfen yükleme yapılacak mevcut Google Drive klasör adını yazın:", hedefKlasorAdi);
+        if (yeniAd === null) {
+            alert("İşlem kullanıcı tarafından iptal edildi.");
+            return; 
+        } else if (yeniAd.trim() === "") {
+            alert("Geçersiz klasör adı!");
+            return;
+        }
+        hedefKlasorAdi = yeniAd.trim();
+    }
+
+    alert(`Bord No ${bordNo} paketine ait 4 adet normal resim doğrudan "${hedefKlasorAdi}" klasörüne gönderiliyor. Lütfen bekleyin...`);
+
+    try {
+        console.log(`Google Drive REST API Tetiklendi. Hedef Klasör: ${hedefKlasorAdi}`);
+
+        // A. Google Drive üzerinde bu isimdeki klasörün ID'sini sorgula (Klasör oluşturmaz, sadece arar)
+        let listeResponse = await fetch(`https://googleapis.com{hedefKlasorAdi}'+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${GOOGLE_DRIVE_ACCESS_TOKEN}` }
+        });
+        
+        let listeVerisi = await listeResponse.json();
+        
+        if (!listeVerisi.files || listeVerisi.files.length === 0) {
+            alert(`🚨 Hata: Google Drive'da "${hedefKlasorAdi}" isminde manuel açılmış bir klasör bulunamadı! Lütfen önce Drive'da klasörü oluşturun veya ismi doğru yazın.`);
+            return;
+        }
+        
+        let folderId = listeVerisi.files[0].id;
+
+        // B. Peş peşe 4 normal resmi bu mevcut klasör ID'sinin içine fırlatır
+        for (let file of uretilenGorseller) {
+            // Base64 kod dizesini normal JPG byte dizisine (Blob) çeviriyoruz
+            let blobVeri = await (await fetch(file.veri)).blob();
+            
+            let metadata = { 'name': file.isim, 'parents': [folderId] };
+            let formData = new FormData();
+            formData.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
+            formData.append('file', blobVeri);
+
+            let uploadResponse = await fetch('https://googleapis.com', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${GOOGLE_DRIVE_ACCESS_TOKEN}` },
+                body: formData
+            });
+
+            if (!uploadResponse.ok) {
+                let errLog = await uploadResponse.json();
+                throw new Error(errLog.error ? errLog.error.message : "Yükleme başarısız");
+            }
+        }
+
+        // Başarılı Kapanış ve İşlem Sonu Kilidi
+        setTimeout(() => {
+            alert(`✅ Harika! Bord No ${bordNo} paketine ait 4 adet normal JPG resmi doğrudan Google Drive'daki "${hedefKlasorAdi}" klasörüne başarıyla yüklendi.`);
+            bordNoSelect.value = ""; // Numarayı sıfırla
+        }, 500);
+
+    } catch (hata) {
+        alert("Google Drive API bağlantısında sorun oluştu. Lütfen Access Token sürenizi kontrol edin!\nDetay: " + hata.message);
+    }
+});
+</script>
+</body>
+</html>
